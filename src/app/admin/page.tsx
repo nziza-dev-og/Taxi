@@ -18,6 +18,7 @@ export default function AdminPage() {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setLoading(true); // Start loading on auth change
       setUser(currentUser);
+      setIsAdmin(null); // Reset admin status on auth change
 
       if (currentUser) {
         // User is logged in, check if they are an admin in Firestore
@@ -30,24 +31,21 @@ export default function AdminPage() {
           } else {
             // User document doesn't exist in 'admins' or isAdmin is not true
             setIsAdmin(false);
-            console.warn(`User ${currentUser.email} attempted admin access but is not authorized.`);
-            // Optionally sign them out immediately if they somehow reached this page without being admin
+            console.warn(`User ${currentUser.email} attempted admin access but is not authorized. Logging out.`);
+            // Log them out immediately as they shouldn't be in the admin section
              await auth.signOut();
              setUser(null); // Clear user state after sign out
-             setIsAdmin(null); // Reset admin status
+             // isAdmin remains false
           }
         } catch (error) {
           console.error("Error checking admin status:", error);
           setIsAdmin(false); // Assume not admin on error
-          // Optionally sign out on error too
+          // Log them out on error too
            await auth.signOut();
            setUser(null);
-           setIsAdmin(null);
         }
-      } else {
-        // No user is logged in
-        setIsAdmin(null); // Reset admin status
       }
+      // No user logged in case handled implicitly
       setLoading(false); // Finish loading after check
     });
 
@@ -57,38 +55,57 @@ export default function AdminPage() {
 
   // --- Render Logic ---
 
-  // Initial loading state for the page
+  // Initial loading state for the page while auth resolves
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center flex-1"> {/* Use flex-1 */}
         <LoadingSpinner size="lg" />
       </div>
     );
   }
 
-  // If user is not logged in OR they are logged in but verified NOT to be an admin
-  if (!user || isAdmin === false) {
-    // Show the Admin Authentication form (Login/Register for Admins)
-    return <AdminAuth />;
+  // User NOT Logged In
+  if (!user) {
+    // Show the Admin Authentication form, ensure it fills space
+    return (
+      <div className="flex items-center justify-center flex-1">
+        <AdminAuth />
+      </div>
+    );
   }
 
-  // If user is logged in AND verified to be an admin
-  if (isAdmin === true && user) {
-    // Show the Admin Dashboard
-    return <AdminDashboard adminUser={user} />; // Pass the admin user object to the dashboard
-  }
-
-   // Loading state specifically while verifying admin status after user is confirmed logged in
+   // Loading state specifically while verifying admin status AFTER user is confirmed logged in
    if (user && isAdmin === null) {
       return (
-           <div className="flex items-center justify-center min-h-screen">
+           <div className="flex items-center justify-center flex-1">
                <p className="text-muted-foreground mr-2">Verifying admin access...</p> <LoadingSpinner size="md" />
            </div>
       );
    }
 
-  // Fallback case - should ideally not be reached if logic is sound.
-  // Defaults to showing the Auth form.
-   return <AdminAuth />;
-}
+   // User logged in but verified NOT to be an admin
+   if (user && isAdmin === false) {
+      // This state might be brief before the useEffect logs them out and user becomes null
+       return (
+           <div className="flex items-center justify-center flex-1">
+               <p className="text-destructive">Access Denied. Not an authorized administrator.</p>
+               {/* Optionally add a button to redirect or retry */}
+           </div>
+       );
+   }
 
+
+  // User is logged in AND verified to be an admin
+  if (user && isAdmin === true) {
+    // Show the Admin Dashboard, ensure it fills space
+    return <AdminDashboard adminUser={user} />;
+  }
+
+
+  // Fallback case - should ideally not be reached. Defaults to showing the Auth form.
+   return (
+       <div className="flex items-center justify-center flex-1">
+           <AdminAuth />
+       </div>
+   );
+}

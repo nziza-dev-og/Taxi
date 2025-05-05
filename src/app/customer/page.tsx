@@ -20,6 +20,8 @@ export default function CustomerPage() {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setLoading(true);
       setUser(currentUser);
+      setCustomerData(null); // Reset customer data on auth change
+      setIsCustomerVerified(null); // Reset verification status
 
       if (currentUser) {
         // User is logged in, check if they exist in the 'customers' collection
@@ -33,13 +35,12 @@ export default function CustomerPage() {
           } else {
             // User exists in Auth but NOT in 'customers' collection.
             // This could happen if they signed up as a driver/admin or if there was an error during signup.
-            console.warn(`User ${currentUser.email} logged in but not found in 'customers' collection.`);
+            console.warn(`User ${currentUser.email} logged in but not found in 'customers' collection. Logging out from customer portal.`);
             setIsCustomerVerified(false);
             // Log them out as they shouldn't be accessing the customer section
              await auth.signOut();
-             setUser(null);
-             setCustomerData(null);
-             setIsCustomerVerified(null); // Reset verification status
+             setUser(null); // Clear user state after sign out
+             // customerData and isCustomerVerified are already reset
           }
         } catch (error) {
           console.error("Error verifying customer status:", error);
@@ -47,15 +48,11 @@ export default function CustomerPage() {
           // Log them out on error too
            await auth.signOut();
            setUser(null);
-           setCustomerData(null);
-           setIsCustomerVerified(null);
+           // customerData and isCustomerVerified are already reset
         }
-      } else {
-        // No user is logged in
-        setCustomerData(null);
-        setIsCustomerVerified(null); // Reset verification status
       }
-      setLoading(false);
+      // No user is logged in case is handled implicitly as currentUser will be null
+      setLoading(false); // Set loading to false after checks are complete
     });
 
     // Cleanup subscription on unmount
@@ -64,7 +61,7 @@ export default function CustomerPage() {
 
   // --- Render Logic ---
 
-  // Initial loading state
+  // Initial loading state or while auth state is resolving
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -73,29 +70,49 @@ export default function CustomerPage() {
     );
   }
 
-  // If user is not logged in OR they are logged in but verified NOT to be a customer
-   if (!user || isCustomerVerified === false) {
+  // If user is not logged in OR they were logged in but found not to be a customer (and logged out)
+   if (!user) {
       // Show the Customer Authentication form (Login/Register)
-      return <CustomerAuth />;
+      // Ensure it fills the available space within the layout
+       return (
+           <div className="flex items-center justify-center flex-1">
+                <CustomerAuth />
+           </div>
+       );
    }
 
-
-  // If user is logged in AND verified to be a customer
-  if (user && isCustomerVerified === true && customerData) {
-    // Show the Customer Dashboard
-    return <CustomerDashboard customer={customerData} />; // Pass customer data to the dashboard
-  }
-
-  // Loading state specifically while verifying customer status after user is confirmed logged in
+   // Loading state specifically while verifying customer status AFTER user is confirmed logged in
+   // (but before isCustomerVerified is set to true or false)
    if (user && isCustomerVerified === null) {
        return (
-           <div className="flex items-center justify-center min-h-screen">
+           <div className="flex items-center justify-center flex-1">
                <p className="text-muted-foreground mr-2">Verifying customer account...</p> <LoadingSpinner size="md" />
            </div>
        );
    }
 
+  // If user is logged in AND verified to be a customer
+  if (user && isCustomerVerified === true && customerData) {
+    // Show the Customer Dashboard, ensure it fills the space
+    return <CustomerDashboard customer={customerData} />;
+  }
 
-  // Fallback case - should ideally not be reached. Defaults to showing the Auth form.
-  return <CustomerAuth />;
+  // Fallback case: If user is logged in but verification determined they are not a customer
+  // (This state might be brief before the useEffect logs them out and user becomes null)
+  if (user && isCustomerVerified === false) {
+       return (
+           <div className="flex items-center justify-center flex-1">
+               <p className="text-destructive">Access Denied. Not a valid customer account.</p>
+               {/* Optionally add a button to redirect or retry */}
+           </div>
+       );
+   }
+
+
+  // Default fallback - show auth form if none of the above conditions are met (should be rare)
+   return (
+       <div className="flex items-center justify-center flex-1">
+            <CustomerAuth />
+       </div>
+   );
 }

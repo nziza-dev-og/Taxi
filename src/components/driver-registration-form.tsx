@@ -42,6 +42,7 @@ type LoginFormData = z.infer<typeof loginSchema>;
 export default function DriverRegistrationForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+   const [activeTab, setActiveTab] = useState<string>("login"); // Track active tab to clear errors
   const { toast } = useToast();
 
   const registrationForm = useForm<RegistrationFormData>({
@@ -62,6 +63,12 @@ export default function DriverRegistrationForm() {
       password: '',
     },
   });
+
+   // Clear errors when switching tabs
+  const handleTabChange = (value: string) => {
+      setActiveTab(value);
+      setError(null); // Clear error message
+  }
 
   // Helper to map Firebase Auth errors to user-friendly messages
   const handleFirebaseAuthError = (err: AuthError): string => {
@@ -145,15 +152,15 @@ export default function DriverRegistrationForm() {
             setError('An unexpected error occurred during login.');
            console.error(err);
        }
-    } finally {
-       // Keep loading indicator briefly on success for smoother transition handled by auth listener
-       if (error) setLoading(false); // Only stop loading if there's an error to show
+        setLoading(false); // Stop loading on error or success
     }
+     // Removed finally block to let loading state persist briefly on success for smoother transition
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-900 p-4">
-      <Tabs defaultValue="login" className="w-full max-w-md">
+    // Ensure this component fills the space provided by its parent layout
+     <div className="flex flex-1 items-center justify-center p-4">
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full max-w-md">
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="login">Login</TabsTrigger>
           <TabsTrigger value="register">Register</TabsTrigger>
@@ -168,7 +175,7 @@ export default function DriverRegistrationForm() {
             </CardHeader>
             <form onSubmit={loginForm.handleSubmit(onLoginSubmit)}>
               <CardContent className="space-y-4">
-                {error && (
+                 {error && activeTab === 'login' && (
                   <Alert variant="destructive">
                     <AlertCircle className="h-4 w-4" />
                     <AlertTitle>Login Error</AlertTitle>
@@ -222,7 +229,7 @@ export default function DriverRegistrationForm() {
             </CardHeader>
              <form onSubmit={registrationForm.handleSubmit(onRegisterSubmit)}>
               <CardContent className="space-y-4">
-                 {error && ( // Display registration-specific errors
+                 {error && activeTab === 'register' && ( // Display registration-specific errors
                   <Alert variant="destructive">
                     <AlertCircle className="h-4 w-4" />
                     <AlertTitle>Registration Error</AlertTitle>

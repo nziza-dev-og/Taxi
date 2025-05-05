@@ -161,7 +161,8 @@ export default function CustomerAuth() {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-900 p-4">
+    // Ensure this component fills the space provided by its parent layout
+    <div className="flex flex-1 items-center justify-center p-4">
       <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full max-w-md">
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="login">Customer Login</TabsTrigger>
@@ -317,4 +318,3 @@ export default function CustomerAuth() {
     </div>
   );
 }
-

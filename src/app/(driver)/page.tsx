@@ -19,6 +19,7 @@ export default function DriverHomePage() { // Renamed component slightly for cla
 
   useEffect(() => {
     setLoading(true); // Start loading whenever auth state might change
+    setIsApproved(null); // Reset approval status on auth change
 
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
@@ -55,31 +56,19 @@ export default function DriverHomePage() { // Renamed component slightly for cla
             }
           } else {
             // Driver document doesn't exist in Firestore - this shouldn't happen if registration worked
-            console.error("Driver document not found for logged-in user:", currentUser.uid);
-            // Check if user might be a customer or admin instead before marking as not approved
-            const customerDocRef = doc(db, 'customers', currentUser.uid);
-            const adminDocRef = doc(db, 'admins', currentUser.uid);
-            const [customerSnap, adminSnap] = await Promise.all([getDoc(customerDocRef), getDoc(adminDocRef)]);
-
-            if (customerSnap.exists() || adminSnap.exists()) {
-                 // User is likely logged in as customer/admin, deny access to driver portal
-                 console.warn(`User ${currentUser.email} is not a driver. Logging out from driver portal.`);
-                 await auth.signOut(); // Log them out from this portal
-                 setUser(null);
-                 setIsApproved(null);
-            } else {
-                // Truly not found anywhere, treat as not approved driver
-                setIsApproved(false);
-            }
+            // BUT it could mean user logged in is a customer or admin
+            console.warn("Driver document not found for logged-in user:", currentUser.uid, "Logging out from driver portal.");
+            setIsApproved(false); // Assume not a driver
+             await auth.signOut(); // Log them out from driver portal
+             setUser(null); // Clear user state
+             setIsApproved(null); // Reset approval state
           }
         } catch (error) {
           console.error("Error checking driver approval/trial status:", error);
           setIsApproved(false); // Assume not approved on error
         }
-      } else {
-        // No user logged in
-        setIsApproved(null); // Reset approval state
       }
+      // No user logged in case is handled implicitly by currentUser being null
       setLoading(false); // Finish loading after checking status
     });
 
@@ -89,17 +78,18 @@ export default function DriverHomePage() { // Renamed component slightly for cla
 
   // --- Render Logic ---
 
+  // Overall Loading State (Auth resolving)
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[calc(100vh-theme(space.14))]"> {/* Adjust height based on header */}
+      <div className="flex items-center justify-center flex-1"> {/* Use flex-1 */}
         <LoadingSpinner size="lg" />
       </div>
     );
   }
 
+  // User NOT Logged In
   if (!user) {
-    // User is not logged in, show the registration/login form
-    // Adjust container to fit within layout
+    // Show the registration/login form, ensure it fills space
     return (
         <div className="flex items-center justify-center flex-1">
              <DriverRegistrationForm />
@@ -107,9 +97,21 @@ export default function DriverHomePage() { // Renamed component slightly for cla
     );
   }
 
-  // User is logged in, check approval/trial status
-  if (isApproved === false) {
-    // User logged in but is not approved AND trial period has expired
+  // User Logged In - Check Status
+
+  // Loading Status (User logged in, but isApproved check is pending)
+   if (user && isApproved === null) {
+      return (
+           <div className="flex items-center justify-center flex-1">
+               <p className="text-muted-foreground mr-2">Checking account status...</p>
+               <LoadingSpinner size="lg"/>
+           </div>
+      );
+   }
+
+
+  // Not Approved / Trial Expired
+  if (user && isApproved === false) {
     return (
       <div className="flex items-center justify-center flex-1 p-4">
         <Card className="w-full max-w-md shadow-lg rounded-lg">
@@ -132,22 +134,14 @@ export default function DriverHomePage() { // Renamed component slightly for cla
     );
   }
 
-  if (isApproved === true) {
-    // User logged in and is approved OR is within the trial period
+  // Approved OR In Trial Period
+  if (user && isApproved === true) {
     // Pass the user object to the dashboard - Dashboard should fill available space
     return <DriverDashboard user={user} />;
   }
 
-  // Fallback/Initial loading state while isApproved is still null (after user is confirmed)
-   if (user && isApproved === null) {
-      return (
-           <div className="flex items-center justify-center flex-1">
-                <LoadingSpinner size="lg"/>
-           </div>
-      );
-   }
 
-  // Should ideally not be reached if logic is sound, but acts as a safety net
+  // Fallback (Shouldn't be reached if logic is correct) - Default to showing login/register
    return (
        <div className="flex items-center justify-center flex-1">
            <DriverRegistrationForm />

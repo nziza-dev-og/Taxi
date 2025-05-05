@@ -186,8 +186,8 @@ export default function AdminDashboard({ adminUser }: AdminDashboardProps) {
   // --- Render Logic ---
 
   return (
-    // Removed outer div container and header/footer - handled by layout
-    <div className="space-y-6"> {/* Use a div to wrap sections if needed */}
+    // This component now directly returns the content that should fill the space within AdminLayout
+    <div className="space-y-6"> {/* Use a div to wrap sections and control spacing */}
          {/* Display Global Errors */}
           {error && (
               <Alert variant="destructive" className="mb-4">
@@ -338,8 +338,8 @@ export default function AdminDashboard({ adminUser }: AdminDashboardProps) {
              <h2 className="text-lg font-semibold mb-3">Approved Drivers</h2>
                <Card className="shadow rounded-lg overflow-hidden">
                     <CardContent className="pt-0">
-                        {loadingDrivers && approvedDrivers.length === 0 ? (
-                            <div className="flex justify-center items-center p-10"><LoadingSpinner size="lg"/></div>
+                        {loadingDrivers && approvedDrivers.length === 0 && pendingDrivers.length > 0 ? ( // Show loading only if there are no pending either
+                             <div className="flex justify-center items-center p-10"><LoadingSpinner size="lg"/></div>
                         ) : approvedDrivers.length === 0 ? (
                              <p className="text-center text-muted-foreground py-6">No drivers have been approved yet.</p>
                         ) : (

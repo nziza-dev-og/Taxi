@@ -5,7 +5,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 // Removed signOut as it's handled by AppNavigation
 import {
   doc,
-  getDoc,
+  getDocs, // Changed from getDoc
   onSnapshot,
   collection,
   query,
@@ -113,7 +113,8 @@ export default function CustomerDashboard({ customer }: CustomerDashboardProps) 
                orderBy('createdAt', 'desc'),
                limit(10)
            );
-           const querySnapshot = await getDoc(q); // Use getDoc for one-time fetch
+           // *** FIX: Use getDocs for a query ***
+           const querySnapshot = await getDocs(q); // Changed from getDoc(q)
            const history = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as RideRequest));
            setRideHistory(history);
        } catch (err) {
@@ -290,7 +291,7 @@ export default function CustomerDashboard({ customer }: CustomerDashboardProps) 
 
   return (
     // Removed outer div, header, and footer - Handled by Layout
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6"> {/* Use grid directly */}
+     <div className="flex-1 p-4 md:p-6 grid grid-cols-1 lg:grid-cols-3 gap-6"> {/* Ensure it fills space and apply grid */}
 
           {/* Left Column: Map and Ride Request Form */}
           <div className="lg:col-span-2 space-y-6">
@@ -424,7 +425,7 @@ export default function CustomerDashboard({ customer }: CustomerDashboardProps) 
                            rideHistory.map(ride => (
                                <div key={ride.id} className="border p-3 rounded-md bg-muted/20">
                                     <div className="flex justify-between items-center mb-1">
-                                        <span className={`text-xs font-semibold capitalize px-2 py-0.5 rounded-full ${ride.status === 'completed' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                                        <span className={`text-xs font-semibold capitalize px-2 py-0.5 rounded-full ${ride.status === 'completed' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-200' : 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200'}`}>
                                            {ride.status}
                                         </span>
                                         <span className="text-xs text-muted-foreground">{formatRelativeTime(ride.completedAt || ride.cancelledAt || ride.createdAt)}</span>
