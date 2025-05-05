@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Check, X, Power, Users, Car, Clock, BarChart, AlertCircle as AlertCircleIcon, Trash2, RefreshCw } from 'lucide-react'; // Renamed AlertCircle, added Trash2, RefreshCw
+import { Check, X, Power, Users, Car, Clock, BarChart, AlertCircle as AlertCircleIcon, Trash2, RefreshCw, User as UserIcon, ShieldCheck } from 'lucide-react'; // Renamed AlertCircle, added Trash2, RefreshCw, UserIcon, ShieldCheck
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -23,6 +23,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog" // Import Alert Dialog components
+import Link from 'next/link'; // Import Link for navigation
 
 import type { Driver, RideRequest } from '@/types'; // Import shared types
 import { formatDistanceToNow } from 'date-fns'; // For relative time formatting
@@ -260,7 +261,7 @@ export default function AdminDashboard({ adminUser }: AdminDashboardProps) {
       {/* Header */}
       <header className="sticky top-0 z-10 flex items-center justify-between p-4 bg-background border-b shadow-sm">
         <div className="flex items-center gap-3">
-           <Users className="h-6 w-6 text-primary" />
+           <ShieldCheck className="h-6 w-6 text-primary" /> {/* Changed Icon */}
           <h1 className="text-xl font-semibold">Admin Dashboard</h1>
            <Badge variant="secondary">Admin</Badge>
         </div>
@@ -469,8 +470,25 @@ export default function AdminDashboard({ adminUser }: AdminDashboardProps) {
 
       </main>
 
-       {/* Footer */}
+       {/* Footer with Navigation Links */}
        <footer className="p-4 text-center text-xs text-muted-foreground border-t mt-auto">
+            <div className="flex justify-center gap-4 mb-2">
+                <Link href="/" passHref>
+                    <Button variant="link" size="sm" className="text-xs text-muted-foreground hover:text-primary">
+                        <Car className="mr-1 h-3 w-3" /> Driver Portal
+                    </Button>
+                </Link>
+                <Link href="/customer" passHref>
+                    <Button variant="link" size="sm" className="text-xs text-muted-foreground hover:text-primary">
+                        <UserIcon className="mr-1 h-3 w-3" /> Customer Portal
+                    </Button>
+                </Link>
+                 <Link href="/admin" passHref>
+                     <Button variant="link" size="sm" className="text-xs text-primary font-semibold"> {/* Highlight current page */}
+                         <ShieldCheck className="mr-1 h-3 w-3" /> Admin Portal
+                     </Button>
+                </Link>
+            </div>
             CurbLink Admin Panel © {new Date().getFullYear()}
        </footer>
 
@@ -502,4 +520,3 @@ export default function AdminDashboard({ adminUser }: AdminDashboardProps) {
     </div>
   );
 }
-

@@ -22,12 +22,14 @@ import {Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle} f
 import {Switch} from '@/components/ui/switch';
 import {Label} from '@/components/ui/label';
 import {Avatar, AvatarFallback, AvatarImage} from '@/components/ui/avatar';
-import {Power, MapPin, PhoneCall, CheckCircle, XCircle, Car, LogOut} from 'lucide-react'; // Added LogOut
+import {Power, MapPin, PhoneCall, CheckCircle, XCircle, Car, LogOut, User as UserIcon, ShieldCheck} from 'lucide-react'; // Added LogOut, UserIcon, ShieldCheck
 import {LoadingSpinner} from '@/components/ui/loading-spinner';
 import {useToast} from '@/hooks/use-toast';
 import {Alert, AlertDescription, AlertTitle} from '@/components/ui/alert';
 import {AlertCircle} from 'lucide-react';
 import type {Driver, RideRequest} from '@/types'; // Import shared types
+import Link from 'next/link'; // Import Link for navigation
+
 
 // Interface for Driver Data fetched from Firestore (matches src/types/index.ts Driver)
 interface DriverData extends Driver {}
@@ -622,10 +624,27 @@ export default function DriverDashboard({user}: DriverDashboardProps) {
         </div>
       </main>
 
-      {/* Footer */}
-      <footer className="p-4 text-center text-xs text-muted-foreground border-t mt-auto">
-        CurbLink Driver App © {new Date().getFullYear()}
-      </footer>
+       {/* Footer with Navigation Links */}
+       <footer className="p-4 text-center text-xs text-muted-foreground border-t mt-auto">
+           <div className="flex justify-center gap-4 mb-2">
+               <Link href="/" passHref>
+                   <Button variant="link" size="sm" className="text-xs text-primary font-semibold"> {/* Highlight current page */}
+                       <Car className="mr-1 h-3 w-3" /> Driver Portal
+                   </Button>
+               </Link>
+               <Link href="/customer" passHref>
+                   <Button variant="link" size="sm" className="text-xs text-muted-foreground hover:text-primary">
+                       <UserIcon className="mr-1 h-3 w-3" /> Customer Portal
+                   </Button>
+               </Link>
+                <Link href="/admin" passHref>
+                    <Button variant="link" size="sm" className="text-xs text-muted-foreground hover:text-primary">
+                        <ShieldCheck className="mr-1 h-3 w-3" /> Admin Portal
+                    </Button>
+               </Link>
+           </div>
+           CurbLink Driver App © {new Date().getFullYear()}
+       </footer>
     </div>
   );
 }

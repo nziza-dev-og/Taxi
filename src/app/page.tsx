@@ -9,6 +9,8 @@ import DriverRegistrationForm from '@/components/driver-registration-form';
 import DriverDashboard from '@/components/driver-dashboard'; // Assuming this will be created
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button'; // Correct import for Button
+
 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);

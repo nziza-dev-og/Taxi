@@ -25,13 +25,14 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Map, MapPin, Car, LogOut, Clock, CheckCircle, XCircle, Search, History } from 'lucide-react'; // Added Search, History
+import { Map, MapPin, Car, LogOut, Clock, CheckCircle, XCircle, Search, History, ShieldCheck, User as UserIcon } from 'lucide-react'; // Added Search, History, ShieldCheck, UserIcon
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle } from 'lucide-react';
 import type { Customer, RideRequest, Driver } from '@/types'; // Import shared types
 import { formatDistanceToNow } from 'date-fns'; // For relative time formatting
+import Link from 'next/link'; // Import Link for navigation
 // Map component placeholder - replace with actual implementation
 const MapPlaceholder = () => <div className="h-64 w-full bg-muted rounded-lg flex items-center justify-center text-muted-foreground">Map Placeholder</div>;
 
@@ -350,7 +351,7 @@ export default function CustomerDashboard({ customer }: CustomerDashboardProps) 
       {/* Header */}
       <header className="sticky top-0 z-10 flex items-center justify-between p-4 bg-background border-b shadow-sm">
         <div className="flex items-center gap-3">
-          <Car className="h-6 w-6 text-primary" />
+          <UserIcon className="h-6 w-6 text-primary" /> {/* Changed Icon */}
           <h1 className="text-xl font-semibold">CurbLink Customer</h1>
         </div>
         <div className="flex items-center gap-2">
@@ -528,10 +529,27 @@ export default function CustomerDashboard({ customer }: CustomerDashboardProps) 
 
       </main>
 
-      {/* Footer */}
-      <footer className="p-4 text-center text-xs text-muted-foreground border-t mt-auto">
-        CurbLink © {new Date().getFullYear()}
-      </footer>
+       {/* Footer with Navigation Links */}
+       <footer className="p-4 text-center text-xs text-muted-foreground border-t mt-auto">
+            <div className="flex justify-center gap-4 mb-2">
+                <Link href="/" passHref>
+                    <Button variant="link" size="sm" className="text-xs text-muted-foreground hover:text-primary">
+                        <Car className="mr-1 h-3 w-3" /> Driver Portal
+                    </Button>
+                </Link>
+                <Link href="/customer" passHref>
+                    <Button variant="link" size="sm" className="text-xs text-primary font-semibold"> {/* Highlight current page */}
+                        <UserIcon className="mr-1 h-3 w-3" /> Customer Portal
+                    </Button>
+                </Link>
+                 <Link href="/admin" passHref>
+                     <Button variant="link" size="sm" className="text-xs text-muted-foreground hover:text-primary">
+                         <ShieldCheck className="mr-1 h-3 w-3" /> Admin Portal
+                     </Button>
+                </Link>
+            </div>
+            CurbLink © {new Date().getFullYear()}
+       </footer>
     </div>
   );
 }
