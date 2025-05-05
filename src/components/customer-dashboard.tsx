@@ -42,23 +42,27 @@ interface CustomerDashboardProps {
 }
 
 // Corrected debounce function for async functions
+// Adjusted return type and error handling based on user feedback to resolve TS error
 function debounce<F extends (...args: any[]) => Promise<any>>(func: F, waitFor: number) {
   let timeout: NodeJS.Timeout;
-  return (...args: Parameters<F>): Promise<Awaited<ReturnType<F>>> => // Return Promise of the resolved type
-    new Promise(resolve => {
+  // Adjust return type to match the expected Promise<GeoPoint | null>
+  return (...args: Parameters<F>): ReturnType<F> => {
+    return new Promise((resolve) => {
       clearTimeout(timeout);
-      timeout = setTimeout(async () => { // Make the inner function async
+      timeout = setTimeout(async () => {
         try {
-          const result = await func(...args); // Await the async function
-          resolve(result); // Resolve with the actual result
+          const result = await func(...args);
+          resolve(result); // Resolve with the actual result (GeoPoint | null)
         } catch (error) {
-           console.error("Error in debounced function:", error);
-           // Decide how to handle errors, maybe resolve with a specific value or reject
-           resolve(undefined as any); // Resolve with undefined on error or reject(error)
+          console.error("Error in debounced function:", error);
+          // Resolve with null on error to maintain the expected return type
+          resolve(null as any); // Use 'as any' to fit the generic structure, result is effectively Promise<null> here
         }
       }, waitFor);
-    });
+    }) as ReturnType<F>; // Assert the return type matches the original function's promise type
+  };
 }
+
 
 export default function CustomerDashboard({ customer }: CustomerDashboardProps) {
   const [pickupAddress, setPickupAddress] = useState('');
@@ -174,8 +178,8 @@ export default function CustomerDashboard({ customer }: CustomerDashboardProps) 
 
   useEffect(() => {
       if (pickupAddress) {
-          // .then() now correctly receives GeoPoint | null
-          debouncedGeocode(pickupAddress).then((location: GeoPoint | null) => {
+          // .then() now correctly receives GeoPoint | null because debouncedGeocode returns Promise<GeoPoint | null>
+          debouncedGeocode(pickupAddress).then((location: GeoPoint | null) => { // Explicitly type location
               setPickupLocation(location);
               if (location && destinationLocation) estimateFare(location, destinationLocation);
           });
@@ -190,7 +194,7 @@ export default function CustomerDashboard({ customer }: CustomerDashboardProps) 
    useEffect(() => {
        if (destinationAddress) {
            // .then() now correctly receives GeoPoint | null
-           debouncedGeocode(destinationAddress).then((location: GeoPoint | null) => {
+           debouncedGeocode(destinationAddress).then((location: GeoPoint | null) => { // Explicitly type location
                setDestinationLocation(location);
                 if (pickupLocation && location) estimateFare(pickupLocation, location);
            });
