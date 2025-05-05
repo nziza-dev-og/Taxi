@@ -33,4 +33,13 @@ export interface RideRequest {
   fare?: number; // Optional fare calculation
 }
 
+export interface Admin {
+    uid: string;
+    email: string;
+    name: string; // Admins might also have names
+    isAdmin: true; // Flag to identify admin role
+    registrationTimestamp: Timestamp;
+}
+
 // You can add more shared types here as the application grows
+
