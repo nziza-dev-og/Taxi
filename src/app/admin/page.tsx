@@ -1,4 +1,3 @@
-
 "use client"; // This component needs client-side interactivity for auth state and data fetching
 
 import React, { useState, useEffect } from 'react';
@@ -92,3 +91,4 @@ export default function AdminPage() {
   // Defaults to showing the Auth form.
    return <AdminAuth />;
 }
+
