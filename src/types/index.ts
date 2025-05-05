@@ -14,13 +14,23 @@ export interface Driver {
   // Add other fields as needed, e.g., rating, totalRides, etc.
 }
 
+export interface Customer {
+    uid: string;
+    email: string;
+    name: string;
+    phone?: string; // Optional phone number
+    registrationTimestamp: Timestamp;
+    // Add other customer-specific fields if necessary, e.g., payment methods, preferred locations
+}
+
+
 export interface RideRequest {
   id: string; // Document ID from Firestore
-  riderId: string; // ID of the user requesting the ride
-  riderName: string; // Name of the rider
+  riderId: string; // ID of the user requesting the ride (Customer UID)
+  riderName: string; // Name of the rider (Customer Name)
   riderPhone?: string; // Optional rider phone number (consider privacy/masking)
   pickupLocation: GeoPoint; // Coordinates for pickup
-  pickupAddress?: string; // Optional formatted pickup address
+  pickupAddress: string; // Formatted pickup address (required)
   destinationLocation?: GeoPoint; // Optional destination coordinates
   destinationAddress: string; // Formatted destination address (required)
   status: 'pending' | 'accepted' | 'declined' | 'ongoing' | 'completed' | 'cancelled'; // Ride status lifecycle
@@ -44,5 +54,6 @@ export interface Admin {
     // Add other admin-specific fields if necessary
 }
 
-// You can add more shared types here as the application grows, e.g., Customer, Payment, etc.
+// You can add more shared types here as the application grows, e.g., Payment, etc.
+
 
