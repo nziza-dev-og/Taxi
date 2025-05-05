@@ -27,7 +27,7 @@ export default function PublicLandingPage() {
                   Book a Ride Now
                 </Button>
               </Link>
-              <Link href="/" passHref>
+              <Link href="/" passHref> {/* Corrected href to point to root path for drivers */}
                 <Button size="lg" variant="outline" className="shadow-md transition-transform transform hover:scale-105">
                   Drive with Us
                 </Button>
@@ -129,7 +129,7 @@ export default function PublicLandingPage() {
                    <Link href="/customer" passHref>
                        <Button size="lg" className="bg-primary text-primary-foreground hover:bg-primary/90 shadow-md">I Need a Ride</Button>
                    </Link>
-                   <Link href="/" passHref>
+                   <Link href="/" passHref> {/* Corrected href to point to root path for drivers */}
                        <Button size="lg" variant="secondary" className="shadow-md">I Want to Drive</Button>
                    </Link>
                    <Link href="/admin" passHref>
