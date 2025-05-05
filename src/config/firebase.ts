@@ -8,13 +8,13 @@ import { getStorage } from "firebase/storage";
 // Ensure environment variables are set up in a real project
 // Example using process.env (requires configuration, e.g., with .env.local and next.config.js)
 const firebaseConfig = {
-    apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "YOUR_API_KEY", // Replace with your actual key or env variable
-    authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "YOUR_AUTH_DOMAIN",
-    projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "YOUR_PROJECT_ID",
-    storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "YOUR_STORAGE_BUCKET",
-    messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "YOUR_MESSAGING_SENDER_ID",
-    appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "YOUR_APP_ID",
-    measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID || "YOUR_MEASUREMENT_ID" // Optional
+  apiKey: "AIzaSyDh4DEMftlxrU708lu0GDzQqw8iB4SINLw",
+  authDomain: "taxi-4cd78.firebaseapp.com",
+  projectId: "taxi-4cd78",
+  storageBucket: "taxi-4cd78.firebasestorage.app",
+  messagingSenderId: "190447657622",
+  appId: "1:190447657622:web:ea6f542b74aafae05c58b7",
+  measurementId: "G-48G6DLSZJV"
 };
 
 // Basic validation
