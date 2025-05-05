@@ -49,7 +49,7 @@ export default function AdminDashboard({ adminUser }: AdminDashboardProps) {
   const [loadingStats, setLoadingStats] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [processingDriverId, setProcessingDriverId] = useState<string | null>(null);
-  const [driverToReject, setDriverToReject] = useState<Driver | null>(null);
+  const [driverToReject, setDriverToReject] = useState<Driver | null>(null); // State holds the driver object to reject
   const { toast } = useToast();
 
   // --- Data Fetching & Listeners ---
@@ -143,11 +143,11 @@ export default function AdminDashboard({ adminUser }: AdminDashboardProps) {
   };
 
   const openRejectDialog = (driver: Driver) => {
-      setDriverToReject(driver);
+      setDriverToReject(driver); // Set the driver object to state
   };
 
   const confirmRejectDriver = async () => {
-    if (!driverToReject) return;
+    if (!driverToReject) return; // Ensure driverToReject state is set
     const driverId = driverToReject.uid;
     const driverName = driverToReject.name;
     setProcessingDriverId(driverId);
@@ -156,14 +156,15 @@ export default function AdminDashboard({ adminUser }: AdminDashboardProps) {
     try {
       await deleteDoc(driverDocRef); // Permanently delete
       toast({ title: "Driver Rejected", description: `${driverName}'s registration has been rejected and removed.`, variant: "destructive" });
-      setDriverToReject(null);
+      setDriverToReject(null); // Close the dialog by resetting state
     } catch (err) {
       console.error("Error rejecting driver:", err);
       setError(`Failed to reject driver ${driverName}.`);
       toast({ title: "Rejection Error", description: `Could not reject driver ${driverName}.`, variant: "destructive" });
     } finally {
       setProcessingDriverId(null);
-      setDriverToReject(null);
+       // Reset state even on error to potentially close dialog
+       // setDriverToReject(null);
     }
   };
 
@@ -301,6 +302,7 @@ export default function AdminDashboard({ adminUser }: AdminDashboardProps) {
                         <TableCell>{driver.vehicleDetails}</TableCell>
                         <TableCell className="hidden md:table-cell">{formatRelativeTime(driver.registrationTimestamp)}</TableCell>
                         <TableCell className="text-right space-x-1">
+                           {/* Approve Button */}
                            <Button
                              variant="ghost"
                              size="icon"
@@ -311,18 +313,45 @@ export default function AdminDashboard({ adminUser }: AdminDashboardProps) {
                            >
                              {processingDriverId === driver.uid ? <LoadingSpinner size="sm" /> : <Check className="h-4 w-4" />}
                            </Button>
-                            <AlertDialogTrigger asChild>
-                               <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => openRejectDialog(driver)}
-                                  disabled={processingDriverId === driver.uid}
-                                  title={`Reject ${driver.name}`}
-                                  className="text-red-600 hover:text-red-700 hover:bg-red-500/10 dark:hover:bg-red-500/20 rounded-full"
-                                >
-                                   {processingDriverId === driver.uid ? <LoadingSpinner size="sm" /> : <Trash2 className="h-4 w-4" />}
-                               </Button>
-                             </AlertDialogTrigger>
+                           {/* Reject Button with AlertDialog */}
+                           <AlertDialog>
+                               <AlertDialogTrigger asChild>
+                                   <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      // No onClick needed here, just opens the dialog
+                                      disabled={processingDriverId === driver.uid}
+                                      title={`Reject ${driver.name}`}
+                                      className="text-red-600 hover:text-red-700 hover:bg-red-500/10 dark:hover:bg-red-500/20 rounded-full"
+                                    >
+                                       {processingDriverId === driver.uid ? <LoadingSpinner size="sm" /> : <Trash2 className="h-4 w-4" />}
+                                   </Button>
+                               </AlertDialogTrigger>
+                               <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                      <AlertDialogTitle>Confirm Rejection</AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                          Are you sure you want to reject the registration for driver{' '}
+                                          <span className="font-semibold">{driver.name}</span> ({driver.email})?
+                                          This action will permanently delete their pending registration data.
+                                      </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                      <AlertDialogCancel disabled={processingDriverId === driver.uid}>Cancel</AlertDialogCancel>
+                                      <AlertDialogAction
+                                          // Call confirmRejectDriver with the specific driver when clicked
+                                          onClick={async () => {
+                                            setDriverToReject(driver); // Set the driver to reject
+                                            await confirmRejectDriver(); // Call the rejection logic
+                                          }}
+                                          disabled={processingDriverId === driver.uid}
+                                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                      >
+                                          {processingDriverId === driver.uid ? <LoadingSpinner size="sm" /> : "Yes, Reject Driver"}
+                                      </AlertDialogAction>
+                                  </AlertDialogFooter>
+                               </AlertDialogContent>
+                           </AlertDialog>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -374,29 +403,10 @@ export default function AdminDashboard({ adminUser }: AdminDashboardProps) {
                </Card>
          </section>
 
-        {/* Rejection Confirmation Dialog */}
-        <AlertDialog open={!!driverToReject} onOpenChange={(open) => !open && setDriverToReject(null)}>
-              <AlertDialogContent>
-                  <AlertDialogHeader>
-                      <AlertDialogTitle>Confirm Rejection</AlertDialogTitle>
-                      <AlertDialogDescription>
-                          Are you sure you want to reject the registration for driver{' '}
-                          <span className="font-semibold">{driverToReject?.name}</span> ({driverToReject?.email})?
-                          This action will permanently delete their pending registration data.
-                      </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                      <AlertDialogCancel disabled={processingDriverId === driverToReject?.uid}>Cancel</AlertDialogCancel>
-                      <AlertDialogAction
-                          onClick={confirmRejectDriver}
-                          disabled={processingDriverId === driverToReject?.uid}
-                           className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                       >
-                          {processingDriverId === driverToReject?.uid ? <LoadingSpinner size="sm" /> : "Yes, Reject Driver"}
-                      </AlertDialogAction>
-                  </AlertDialogFooter>
-              </AlertDialogContent>
-        </AlertDialog>
+        {/*
+          Remove the standalone AlertDialog. The dialog is now generated
+          inside the map loop for each pending driver row.
+        */}
 
 
     </div> // End wrapping div
