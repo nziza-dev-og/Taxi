@@ -1,4 +1,3 @@
-
 {
   "name": "curblink-driver",
   "version": "0.1.0",
@@ -36,12 +35,12 @@
     "@radix-ui/react-tabs": "^1.1.3",
     "@radix-ui/react-toast": "^1.2.6",
     "@radix-ui/react-tooltip": "^1.1.8",
-    "@tanstack-query-firebase/react": "^1.0.5",
+    "@tanstack-query-firebase/react": "^1.0.4",
     "@tanstack/react-query": "^5.66.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^3.6.0",
-    "firebase": "^10.12.4",
+    "firebase": "^11.6.1",
     "genkit": "^1.6.2",
     "lucide-react": "^0.475.0",
     "next": "15.2.3",
