@@ -3,29 +3,42 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { User, signOut } from 'firebase/auth';
-import { collection, query, where, onSnapshot, doc, updateDoc, getDocs, orderBy, limit, Timestamp, writeBatch } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, updateDoc, getDocs, orderBy, limit, Timestamp, writeBatch, deleteDoc } from 'firebase/firestore'; // Added deleteDoc
 import { auth, db } from '@/config/firebase';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Check, X, Power, Users, Car, Clock, BarChart } from 'lucide-react';
+import { Check, X, Power, Users, Car, Clock, BarChart, AlertCircle as AlertCircleIcon, Trash2, RefreshCw } from 'lucide-react'; // Renamed AlertCircle, added Trash2, RefreshCw
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog" // Import Alert Dialog components
+
 import type { Driver, RideRequest } from '@/types'; // Import shared types
-import { formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow } from 'date-fns'; // For relative time formatting
 
 interface AdminDashboardProps {
   adminUser: User;
 }
 
+// Structure for dashboard stats
 interface DashboardStats {
     totalDrivers: number;
     pendingDrivers: number;
     approvedDrivers: number;
-    activeRides: number;
+    activeRides: number; // Example stat
+    // Add more stats as needed: onlineDrivers, completedRidesToday, etc.
 }
 
 export default function AdminDashboard({ adminUser }: AdminDashboardProps) {
@@ -35,64 +48,79 @@ export default function AdminDashboard({ adminUser }: AdminDashboardProps) {
   const [loadingDrivers, setLoadingDrivers] = useState(true);
   const [loadingStats, setLoadingStats] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [processingDriverId, setProcessingDriverId] = useState<string | null>(null);
+  const [processingDriverId, setProcessingDriverId] = useState<string | null>(null); // Track which driver action is in progress
+  const [driverToReject, setDriverToReject] = useState<Driver | null>(null); // Store driver info for rejection confirmation
   const { toast } = useToast();
 
-  // Fetch and listen for pending drivers
+  // --- Data Fetching & Listeners ---
+
+  // Fetch and listen for PENDING drivers (isApproved == false)
   useEffect(() => {
     setLoadingDrivers(true);
-    const q = query(collection(db, "drivers"), where("isApproved", "==", false), orderBy("registrationTimestamp", "desc"));
+    const q = query(
+        collection(db, "drivers"),
+        where("isApproved", "==", false),
+        orderBy("registrationTimestamp", "desc") // Show newest pending first
+    );
 
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
       const driversData = querySnapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as Driver));
       setPendingDrivers(driversData);
-      setLoadingDrivers(false);
+      setLoadingDrivers(false); // Stop loading once pending drivers are fetched/updated
     }, (err) => {
       console.error("Error fetching pending drivers:", err);
-      setError("Failed to load pending drivers.");
+      setError("Failed to load pending drivers. Real-time updates may be affected.");
       setLoadingDrivers(false);
     });
 
-    return () => unsubscribe();
+    return () => unsubscribe(); // Cleanup listener on unmount
   }, []);
 
-  // Fetch and listen for approved drivers
+  // Fetch and listen for APPROVED drivers (isApproved == true)
   useEffect(() => {
-    // Separate loading state if needed, or reuse setLoadingDrivers initially
-    const q = query(collection(db, "drivers"), where("isApproved", "==", true), orderBy("name", "asc"));
+    // setLoadingDrivers(true); // Can potentially reuse setLoadingDrivers or use a separate state
+    const q = query(
+        collection(db, "drivers"),
+        where("isApproved", "==", true),
+        orderBy("name", "asc") // Sort approved drivers by name
+    );
 
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
       const driversData = querySnapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as Driver));
       setApprovedDrivers(driversData);
-       // Consider setting loadingDrivers to false here only if both listeners have run,
-       // or manage separate loading states. For simplicity, setting it here.
-       setLoadingDrivers(false);
+       // Consider setting loading false only when both listeners are ready, or use separate states.
+       // Setting here for simplicity assumes pending list might load first.
+       // setLoadingDrivers(false); // Moved loading false to pending listener
     }, (err) => {
       console.error("Error fetching approved drivers:", err);
-      setError("Failed to load approved drivers.");
-       setLoadingDrivers(false);
+      setError("Failed to load approved drivers. Real-time updates may be affected.");
+       // setLoadingDrivers(false);
     });
 
-    return () => unsubscribe();
+    return () => unsubscribe(); // Cleanup listener on unmount
   }, []);
 
-  // Fetch dashboard statistics
-  const fetchStats = useCallback(async () => {
-    setLoadingStats(true);
+  // Fetch dashboard statistics (run once on load and maybe periodically)
+  const fetchStats = useCallback(async (showLoading = false) => {
+    if (showLoading) setLoadingStats(true);
+    setError(null); // Clear previous stat errors
+    console.log("Fetching dashboard stats...");
     try {
+        // Get all drivers to count total, pending, approved
         const driversSnapshot = await getDocs(collection(db, "drivers"));
         const totalDrivers = driversSnapshot.size;
         let pendingCount = 0;
         let approvedCount = 0;
         driversSnapshot.forEach(doc => {
-            if (doc.data().isApproved) {
+            if (doc.data().isApproved === true) {
                 approvedCount++;
             } else {
                 pendingCount++;
             }
         });
 
-        // Get active rides (simplified: 'accepted' or 'ongoing')
+        // Get count of active rides (simplified: 'accepted' or 'ongoing')
+        // Note: Firestore counts reads per document fetched. For just counts, consider summary documents updated by Cloud Functions for efficiency at scale.
         const activeRidesQuery = query(collection(db, "rideRequests"), where("status", "in", ["accepted", "ongoing"]));
         const activeRidesSnapshot = await getDocs(activeRidesQuery);
         const activeRides = activeRidesSnapshot.size;
@@ -103,107 +131,135 @@ export default function AdminDashboard({ adminUser }: AdminDashboardProps) {
             approvedDrivers: approvedCount,
             activeRides
         });
+        console.log("Stats updated:", { totalDrivers, pendingCount, approvedCount, activeRides });
     } catch (err) {
         console.error("Error fetching statistics:", err);
         setError("Failed to load dashboard statistics.");
+        setStats(null); // Clear stats on error
     } finally {
-        setLoadingStats(false);
+        if (showLoading) setLoadingStats(false);
     }
   }, []);
 
   useEffect(() => {
-      fetchStats();
-      // Optionally, set up listeners for stats if real-time updates are crucial
-      // For simplicity, fetching once on load and maybe periodically
-      const intervalId = setInterval(fetchStats, 60000); // Refresh stats every minute
-      return () => clearInterval(intervalId);
+      fetchStats(true); // Fetch stats with loading indicator on initial mount
+      // Set up interval for periodic refresh (e.g., every minute)
+      const intervalId = setInterval(() => fetchStats(false), 60000); // Refresh stats every 60 seconds without loading indicator
+      return () => clearInterval(intervalId); // Cleanup interval on unmount
   }, [fetchStats]);
 
 
-  const handleApproveDriver = async (driverId: string) => {
+  // --- Admin Actions ---
+
+  // Approve a pending driver
+  const handleApproveDriver = async (driverId: string, driverName: string) => {
     setProcessingDriverId(driverId);
     setError(null);
     const driverDocRef = doc(db, 'drivers', driverId);
     try {
       await updateDoc(driverDocRef, {
         isApproved: true,
+        // Optionally add an 'approvedBy' field: approvedBy: adminUser.uid,
+        // Optionally add an 'approvalTimestamp': approvalTimestamp: serverTimestamp()
       });
       toast({
         title: "Driver Approved",
-        description: "The driver has been approved and can now log in.",
+        description: `${driverName} has been approved and can now fully use the platform.`,
       });
-      // Listener will update the lists automatically
+      // Firestore listener will automatically move the driver from pending to approved list in the UI
     } catch (err) {
       console.error("Error approving driver:", err);
-      setError("Failed to approve driver. Please try again.");
+      setError(`Failed to approve driver ${driverName}. Please try again.`);
       toast({
-        title: "Error",
-        description: "Failed to approve driver.",
+        title: "Approval Error",
+        description: `Could not approve driver ${driverName}.`,
         variant: "destructive",
       });
     } finally {
-      setProcessingDriverId(null);
+      setProcessingDriverId(null); // Stop showing loading indicator for this driver
     }
   };
 
-  // Handle Reject (optional: could delete the driver doc or mark as rejected)
-  const handleRejectDriver = async (driverId: string) => {
-    setProcessingDriverId(driverId);
+  // Reject a pending driver (opens confirmation dialog)
+  const openRejectDialog = (driver: Driver) => {
+      setDriverToReject(driver);
+      // The AlertDialog component handles its own open state via the trigger
+  };
+
+  // Confirm and execute driver rejection (called from AlertDialog)
+  const confirmRejectDriver = async () => {
+    if (!driverToReject) return;
+
+    const driverId = driverToReject.uid;
+    const driverName = driverToReject.name;
+    setProcessingDriverId(driverId); // Show loading on the button/dialog action
     setError(null);
     const driverDocRef = doc(db, 'drivers', driverId);
-    try {
-      // Option 1: Delete the document (use with caution)
-      // await deleteDoc(driverDocRef);
 
-      // Option 2: Mark as rejected (add an isRejected field maybe?)
-       await updateDoc(driverDocRef, {
-           isApproved: false, // Keep it false
-           // Add a rejectedReason or rejectedTimestamp if needed
-       });
-       // For this example, we'll just keep them in pending or remove visually via listener
+    try {
+      // Option 1: Delete the driver document (Permanent)
+      await deleteDoc(driverDocRef);
+
+      // Option 2: Mark as rejected (Less destructive, keeps record)
+      // await updateDoc(driverDocRef, {
+      //   isApproved: false, // Keep it false
+      //   isRejected: true, // Add a specific rejection flag
+      //   rejectionTimestamp: serverTimestamp(),
+      //   // Optionally add rejectedBy: adminUser.uid
+      // });
 
       toast({
         title: "Driver Rejected",
-        description: "The driver's registration has been rejected.",
-        variant: "destructive",
+        description: `${driverName}'s registration has been rejected and removed.`, // Adjust message based on action (deleted vs marked)
+        variant: "destructive", // Use destructive variant for rejection
       });
-      // Listener will update the list (if not deleted)
+      // Firestore listener will automatically remove the driver from the pending list.
+       setDriverToReject(null); // Close the dialog implicitly by resetting the state
+
     } catch (err) {
       console.error("Error rejecting driver:", err);
-      setError("Failed to reject driver. Please try again.");
+      setError(`Failed to reject driver ${driverName}. Please try again.`);
        toast({
-        title: "Error",
-        description: "Failed to reject driver.",
+        title: "Rejection Error",
+        description: `Could not reject driver ${driverName}.`,
         variant: "destructive",
       });
     } finally {
-      setProcessingDriverId(null);
+      setProcessingDriverId(null); // Stop loading indicator
+       setDriverToReject(null); // Ensure dialog state is cleared even on error
     }
   };
 
+
+  // Handle Admin Logout
   const handleLogout = async () => {
     await signOut(auth);
     toast({ title: "Logged Out", description: "You have been logged out successfully." });
-    // App-level routing might redirect based on auth state
+    // App-level auth listener (admin/page.tsx) will handle redirecting to login
   };
 
-  // Helper to format Firestore Timestamps or Date objects
+  // --- Helper Functions ---
+
+  // Format Firestore Timestamps or Date objects relatively
   const formatRelativeTime = (timestamp: Timestamp | Date | undefined | null): string => {
     if (!timestamp) return 'N/A';
     try {
+        // Convert Firestore Timestamp to JS Date if necessary
         const date = timestamp instanceof Timestamp ? timestamp.toDate() : timestamp;
         return formatDistanceToNow(date, { addSuffix: true });
     } catch (e) {
-        console.error("Error formatting date:", e);
+        console.error("Error formatting date:", timestamp, e);
         return "Invalid Date";
     }
   };
 
 
+  // --- Render Logic ---
+
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-gray-950">
+    <div className="flex flex-col min-h-screen bg-gray-100 dark:bg-gray-950">
       {/* Header */}
-      <header className="sticky top-0 z-10 flex items-center justify-between p-4 bg-background border-b">
+      <header className="sticky top-0 z-10 flex items-center justify-between p-4 bg-background border-b shadow-sm">
         <div className="flex items-center gap-3">
            <Users className="h-6 w-6 text-primary" />
           <h1 className="text-xl font-semibold">Admin Dashboard</h1>
@@ -217,73 +273,90 @@ export default function AdminDashboard({ adminUser }: AdminDashboardProps) {
         </div>
       </header>
 
-      {/* Main Content */}
+      {/* Main Content Area */}
       <main className="flex-grow p-4 md:p-6 space-y-6">
-         {/* Display errors */}
+         {/* Display Global Errors */}
           {error && (
-              <Alert variant="destructive">
-                  <AlertCircle className="h-4 w-4" />
+              <Alert variant="destructive" className="mb-4">
+                  <AlertCircleIcon className="h-4 w-4" />
                   <AlertTitle>Error</AlertTitle>
                   <AlertDescription>{error}</AlertDescription>
-                   <Button onClick={() => setError(null)} variant="ghost" size="sm" className="absolute top-1 right-1">Dismiss</Button>
+                   {/* Allow dismissing the error */}
+                   <Button onClick={() => setError(null)} variant="ghost" size="sm" className="absolute top-1 right-1 text-destructive hover:bg-destructive/10">X</Button>
               </Alert>
           )}
 
           {/* Statistics Section */}
           <section>
-              <h2 className="text-lg font-semibold mb-3 flex items-center gap-2"><BarChart className="h-5 w-5"/> Overview</h2>
+              <div className="flex justify-between items-center mb-3">
+                <h2 className="text-lg font-semibold flex items-center gap-2"><BarChart className="h-5 w-5"/> Overview</h2>
+                 <Button variant="ghost" size="sm" onClick={() => fetchStats(true)} disabled={loadingStats}>
+                      <RefreshCw className={`h-4 w-4 ${loadingStats ? 'animate-spin' : ''}`}/>
+                      <span className="ml-1">Refresh Stats</span>
+                  </Button>
+              </div>
               {loadingStats ? (
                   <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                      <Card><CardHeader><CardTitle>Loading Stats...</CardTitle></CardHeader><CardContent><LoadingSpinner/></CardContent></Card>
-                      <Card><CardHeader><CardTitle>Loading Stats...</CardTitle></CardHeader><CardContent><LoadingSpinner/></CardContent></Card>
-                      <Card><CardHeader><CardTitle>Loading Stats...</CardTitle></CardHeader><CardContent><LoadingSpinner/></CardContent></Card>
-                      <Card><CardHeader><CardTitle>Loading Stats...</CardTitle></CardHeader><CardContent><LoadingSpinner/></CardContent></Card>
+                      {[...Array(4)].map((_, i) => ( // Skeleton loaders for stats
+                           <Card key={i} className="shadow rounded-lg">
+                               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Loading...</CardTitle></CardHeader>
+                               <CardContent><LoadingSpinner size="md"/></CardContent>
+                           </Card>
+                      ))}
                   </div>
               ) : stats ? (
                   <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                        <Card>
-                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        {/* Total Drivers Stat Card */}
+                        <Card className="shadow rounded-lg overflow-hidden">
+                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 bg-card">
                                 <CardTitle className="text-sm font-medium">Total Drivers</CardTitle>
                                 <Users className="h-4 w-4 text-muted-foreground" />
                             </CardHeader>
-                            <CardContent>
+                            <CardContent className="bg-card">
                                 <div className="text-2xl font-bold">{stats.totalDrivers}</div>
-                                {/* <p className="text-xs text-muted-foreground">+2 since last hour</p> */}
+                                <p className="text-xs text-muted-foreground">All registered drivers</p>
                             </CardContent>
                         </Card>
-                       <Card>
-                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        {/* Pending Approval Stat Card */}
+                       <Card className="shadow rounded-lg overflow-hidden">
+                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 bg-card">
                                 <CardTitle className="text-sm font-medium">Pending Approval</CardTitle>
                                 <Clock className="h-4 w-4 text-muted-foreground" />
                             </CardHeader>
-                            <CardContent>
+                            <CardContent className="bg-card">
                                 <div className="text-2xl font-bold">{stats.pendingDrivers}</div>
                                 <p className="text-xs text-muted-foreground">Drivers awaiting review</p>
                             </CardContent>
                         </Card>
-                         <Card>
-                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        {/* Approved Drivers Stat Card */}
+                         <Card className="shadow rounded-lg overflow-hidden">
+                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 bg-card">
                                 <CardTitle className="text-sm font-medium">Approved Drivers</CardTitle>
                                 <Check className="h-4 w-4 text-muted-foreground" />
                             </CardHeader>
-                            <CardContent>
+                            <CardContent className="bg-card">
                                 <div className="text-2xl font-bold">{stats.approvedDrivers}</div>
-                                 <p className="text-xs text-muted-foreground">{((stats.approvedDrivers / (stats.totalDrivers || 1)) * 100).toFixed(1)}% of total</p>
+                                 <p className="text-xs text-muted-foreground">{((stats.approvedDrivers / (stats.totalDrivers || 1)) * 100).toFixed(0)}% of total</p>
                             </CardContent>
                         </Card>
-                         <Card>
-                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        {/* Active Rides Stat Card */}
+                         <Card className="shadow rounded-lg overflow-hidden">
+                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 bg-card">
                                 <CardTitle className="text-sm font-medium">Active Rides</CardTitle>
                                 <Car className="h-4 w-4 text-muted-foreground" />
                             </CardHeader>
-                            <CardContent>
+                            <CardContent className="bg-card">
                                 <div className="text-2xl font-bold">{stats.activeRides}</div>
                                 <p className="text-xs text-muted-foreground">Rides currently in progress</p>
                             </CardContent>
                         </Card>
                   </div>
               ) : (
-                  <p className="text-muted-foreground">Could not load statistics.</p>
+                   <Card className="shadow rounded-lg">
+                       <CardContent className="pt-6">
+                            <p className="text-center text-muted-foreground">Could not load statistics. <Button variant="link" onClick={() => fetchStats(true)}>Retry</Button></p>
+                        </CardContent>
+                    </Card>
               )}
           </section>
 
@@ -291,51 +364,55 @@ export default function AdminDashboard({ adminUser }: AdminDashboardProps) {
         {/* Pending Driver Approvals Section */}
         <section>
           <h2 className="text-lg font-semibold mb-3">Pending Driver Approvals</h2>
-          <Card>
-            <CardContent className="pt-6">
-              {loadingDrivers ? (
-                 <div className="flex justify-center items-center p-6"><LoadingSpinner /></div>
+          <Card className="shadow rounded-lg overflow-hidden">
+            <CardContent className="pt-0"> {/* Remove top padding */}
+              {loadingDrivers && pendingDrivers.length === 0 ? (
+                 <div className="flex justify-center items-center p-10"><LoadingSpinner size="lg"/></div>
               ) : pendingDrivers.length === 0 ? (
-                <p className="text-center text-muted-foreground">No drivers pending approval.</p>
+                <p className="text-center text-muted-foreground py-6">No drivers are currently pending approval.</p>
               ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead>Name</TableHead>
-                      <TableHead>Email</TableHead>
+                      <TableHead className="hidden sm:table-cell">Email</TableHead>
                       <TableHead>Vehicle</TableHead>
-                      <TableHead>Registered</TableHead>
+                      <TableHead className="hidden md:table-cell">Registered</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {pendingDrivers.map((driver) => (
-                      <TableRow key={driver.uid}>
+                      <TableRow key={driver.uid} className="hover:bg-muted/50">
                         <TableCell className="font-medium">{driver.name}</TableCell>
-                        <TableCell>{driver.email}</TableCell>
+                        <TableCell className="hidden sm:table-cell">{driver.email}</TableCell>
                         <TableCell>{driver.vehicleDetails}</TableCell>
-                        <TableCell>{formatRelativeTime(driver.registrationTimestamp)}</TableCell>
-                        <TableCell className="text-right space-x-2">
+                        <TableCell className="hidden md:table-cell">{formatRelativeTime(driver.registrationTimestamp)}</TableCell>
+                        <TableCell className="text-right space-x-1">
+                           {/* Approve Button */}
                            <Button
                              variant="ghost"
                              size="icon"
-                             onClick={() => handleApproveDriver(driver.uid)}
-                             disabled={processingDriverId === driver.uid}
-                             title="Approve Driver"
-                             className="text-green-600 hover:text-green-700 hover:bg-green-100 dark:hover:bg-green-900"
+                             onClick={() => handleApproveDriver(driver.uid, driver.name)}
+                             disabled={processingDriverId === driver.uid} // Disable if this driver is being processed
+                             title={`Approve ${driver.name}`}
+                             className="text-green-600 hover:text-green-700 hover:bg-green-500/10 dark:hover:bg-green-500/20 rounded-full"
                            >
                              {processingDriverId === driver.uid ? <LoadingSpinner size="sm" /> : <Check className="h-4 w-4" />}
                            </Button>
-                           <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleRejectDriver(driver.uid)} // Implement rejection logic if needed
-                              disabled={processingDriverId === driver.uid}
-                              title="Reject Driver"
-                              className="text-red-600 hover:text-red-700 hover:bg-red-100 dark:hover:bg-red-900"
-                            >
-                               {processingDriverId === driver.uid ? <LoadingSpinner size="sm" /> : <X className="h-4 w-4" />}
-                           </Button>
+                           {/* Reject Button - Triggers Dialog */}
+                            <AlertDialogTrigger asChild>
+                               <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => openRejectDialog(driver)}
+                                  disabled={processingDriverId === driver.uid}
+                                  title={`Reject ${driver.name}`}
+                                  className="text-red-600 hover:text-red-700 hover:bg-red-500/10 dark:hover:bg-red-500/20 rounded-full"
+                                >
+                                   {processingDriverId === driver.uid ? <LoadingSpinner size="sm" /> : <Trash2 className="h-4 w-4" />}
+                               </Button>
+                             </AlertDialogTrigger>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -349,37 +426,38 @@ export default function AdminDashboard({ adminUser }: AdminDashboardProps) {
          {/* Approved Drivers List Section */}
          <section>
              <h2 className="text-lg font-semibold mb-3">Approved Drivers</h2>
-               <Card>
-                    <CardContent className="pt-6">
-                        {loadingDrivers && approvedDrivers.length === 0 ? ( // Show loading only if list is empty
-                            <div className="flex justify-center items-center p-6"><LoadingSpinner /></div>
+               <Card className="shadow rounded-lg overflow-hidden">
+                    <CardContent className="pt-0"> {/* Remove top padding */}
+                        {loadingDrivers && approvedDrivers.length === 0 ? ( // Show loading only if list is empty and still loading
+                            <div className="flex justify-center items-center p-10"><LoadingSpinner size="lg"/></div>
                         ) : approvedDrivers.length === 0 ? (
-                             <p className="text-center text-muted-foreground">No drivers have been approved yet.</p>
+                             <p className="text-center text-muted-foreground py-6">No drivers have been approved yet.</p>
                         ) : (
                              <Table>
                                  <TableHeader>
                                      <TableRow>
                                          <TableHead>Name</TableHead>
-                                         <TableHead>Email</TableHead>
-                                         <TableHead>Vehicle</TableHead>
+                                         <TableHead className="hidden sm:table-cell">Email</TableHead>
+                                         <TableHead className="hidden md:table-cell">Vehicle</TableHead>
                                          <TableHead>Status</TableHead>
-                                         <TableHead>Last Seen</TableHead>
-                                         {/* Add more columns if needed, e.g., Revoke Access button */}
+                                         <TableHead className="hidden lg:table-cell">Last Seen</TableHead>
+                                         {/* Add more columns if needed: Actions (Suspend, View Details) */}
                                      </TableRow>
                                  </TableHeader>
                                  <TableBody>
                                      {approvedDrivers.map((driver) => (
-                                         <TableRow key={driver.uid}>
+                                         <TableRow key={driver.uid} className="hover:bg-muted/50">
                                              <TableCell className="font-medium">{driver.name}</TableCell>
-                                             <TableCell>{driver.email}</TableCell>
-                                             <TableCell>{driver.vehicleDetails}</TableCell>
+                                             <TableCell className="hidden sm:table-cell">{driver.email}</TableCell>
+                                             <TableCell className="hidden md:table-cell">{driver.vehicleDetails}</TableCell>
                                              <TableCell>
-                                                  <Badge variant={driver.isAvailable ? "default" : "outline"} className={driver.isAvailable ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"}>
+                                                  {/* Availability Badge */}
+                                                  <Badge variant={driver.isAvailable ? "default" : "outline"} className={`capitalize ${driver.isAvailable ? "bg-green-100 text-green-800 border-green-300 dark:bg-green-900 dark:text-green-200 dark:border-green-700" : "bg-red-100 text-red-800 border-red-300 dark:bg-red-900 dark:text-red-200 dark:border-red-700"}`}>
                                                       {driver.isAvailable ? 'Available' : 'Unavailable'}
                                                   </Badge>
                                              </TableCell>
-                                             <TableCell>{formatRelativeTime(driver.lastSeen)}</TableCell>
-                                             {/* Add actions like Revoke if needed */}
+                                             <TableCell className="hidden lg:table-cell">{formatRelativeTime(driver.lastSeen)}</TableCell>
+                                             {/* Add actions like Revoke/Suspend/View Details Button here */}
                                              {/* <TableCell className="text-right">...</TableCell> */}
                                          </TableRow>
                                      ))}
@@ -393,10 +471,35 @@ export default function AdminDashboard({ adminUser }: AdminDashboardProps) {
       </main>
 
        {/* Footer */}
-       <footer className="p-4 text-center text-xs text-muted-foreground border-t">
+       <footer className="p-4 text-center text-xs text-muted-foreground border-t mt-auto">
             CurbLink Admin Panel © {new Date().getFullYear()}
        </footer>
+
+        {/* Rejection Confirmation Dialog */}
+        <AlertDialog open={!!driverToReject} onOpenChange={(open) => !open && setDriverToReject(null)}>
+              <AlertDialogContent>
+                  <AlertDialogHeader>
+                      <AlertDialogTitle>Confirm Rejection</AlertDialogTitle>
+                      <AlertDialogDescription>
+                          Are you sure you want to reject the registration for driver{' '}
+                          <span className="font-semibold">{driverToReject?.name}</span> ({driverToReject?.email})?
+                          This action will permanently delete their pending registration data.
+                      </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                      <AlertDialogCancel disabled={processingDriverId === driverToReject?.uid}>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                          onClick={confirmRejectDriver}
+                          disabled={processingDriverId === driverToReject?.uid}
+                           className="bg-destructive text-destructive-foreground hover:bg-destructive/90" // Style action button as destructive
+                       >
+                          {processingDriverId === driverToReject?.uid ? <LoadingSpinner size="sm" /> : "Yes, Reject Driver"}
+                      </AlertDialogAction>
+                  </AlertDialogFooter>
+              </AlertDialogContent>
+        </AlertDialog>
+
+
     </div>
   );
 }
-

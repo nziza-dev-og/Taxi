@@ -1,17 +1,12 @@
 import type { Metadata } from 'next';
-import { Geist, Geist_Mono } from 'next/font/google';
+// import { GeistSans } from 'geist/font/sans'; // Import Geist Sans
+// import { GeistMono } from 'geist/font/mono'; // Import Geist Mono - Removed as not used
 import './globals.css';
 import { Toaster } from "@/components/ui/toaster"; // Import Toaster
 
-const geistSans = Geist({
-  variable: '--font-geist-sans',
-  subsets: ['latin'],
-});
-
-const geistMono = Geist_Mono({
-  variable: '--font-geist-mono',
-  subsets: ['latin'],
-});
+// Apply fonts using CSS variables approach recommended by Geist
+// const geistSans = GeistSans;
+// const geistMono = GeistMono; // Remove unused variable
 
 export const metadata: Metadata = {
   title: 'CurbLink Driver App', // Updated title
@@ -24,11 +19,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+    <html lang="en"> {/* Add font variables to HTML tag */}
+      <body className={`antialiased`}> {/* Removed font classes from body, handled by html tag */}
         {children}
         <Toaster /> {/* Add Toaster for notifications */}
       </body>
     </html>
   );
 }
+
+

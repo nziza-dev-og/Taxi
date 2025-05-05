@@ -6,7 +6,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, AuthError } from 'firebase/auth';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp, Timestamp } from 'firebase/firestore'; // Import Timestamp
 import { auth, db } from '@/config/firebase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,20 +14,23 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { AlertCircle } from "lucide-react"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertCircle } from "lucide-react";
+import { LoadingSpinner } from './ui/loading-spinner'; // Assuming LoadingSpinner exists
 
+// Schema for driver registration
 const registrationSchema = z.object({
   email: z.string().email({ message: 'Invalid email address' }),
   password: z.string().min(6, { message: 'Password must be at least 6 characters' }),
   confirmPassword: z.string(),
-  name: z.string().min(2, { message: 'Name is required' }),
+  name: z.string().min(2, { message: 'Full name is required' }),
   vehicleDetails: z.string().min(5, { message: 'Vehicle details are required (e.g., Make, Model, Year, Plate)' }),
 }).refine((data) => data.password === data.confirmPassword, {
   message: "Passwords don't match",
-  path: ['confirmPassword'], // path of error
+  path: ['confirmPassword'], // Error path
 });
 
+// Schema for driver login
 const loginSchema = z.object({
   email: z.string().email({ message: 'Invalid email address' }),
   password: z.string().min(1, { message: 'Password is required' }),
@@ -60,24 +63,26 @@ export default function DriverRegistrationForm() {
     },
   });
 
-  const handleFirebaseAuthError = (err: AuthError) => {
-      switch (err.code) {
-          case 'auth/email-already-in-use':
-              return 'This email address is already registered.';
-          case 'auth/invalid-email':
-              return 'Please enter a valid email address.';
-          case 'auth/weak-password':
-              return 'Password is too weak. Please choose a stronger password.';
-          case 'auth/user-not-found':
-          case 'auth/wrong-password':
-          case 'auth/invalid-credential':
-              return 'Invalid email or password.';
-          default:
-              console.error("Firebase Auth Error:", err);
-              return 'An unexpected error occurred. Please try again.';
-      }
+  // Helper to map Firebase Auth errors to user-friendly messages
+  const handleFirebaseAuthError = (err: AuthError): string => {
+    switch (err.code) {
+      case 'auth/email-already-in-use':
+        return 'This email address is already registered.';
+      case 'auth/invalid-email':
+        return 'Please enter a valid email address.';
+      case 'auth/weak-password':
+        return 'Password is too weak. Please choose a stronger password.';
+      case 'auth/user-not-found':
+      case 'auth/wrong-password':
+      case 'auth/invalid-credential': // Combined common login errors
+        return 'Invalid email or password.';
+      default:
+        console.error("Firebase Auth Error:", err); // Log unexpected errors
+        return 'An unexpected error occurred. Please try again.';
+    }
   }
 
+  // Handle driver registration
   const onRegisterSubmit = async (data: RegistrationFormData) => {
     setLoading(true);
     setError(null);
@@ -85,7 +90,7 @@ export default function DriverRegistrationForm() {
       const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
       const user = userCredential.user;
 
-      // Save additional driver info to Firestore
+      // Save additional driver info to Firestore 'drivers' collection
       await setDoc(doc(db, 'drivers', user.uid), {
         uid: user.uid,
         email: data.email,
@@ -93,21 +98,22 @@ export default function DriverRegistrationForm() {
         vehicleDetails: data.vehicleDetails,
         isApproved: false, // Default to not approved
         isAvailable: false, // Default to unavailable
-        location: null, // Default location
-        registrationTimestamp: serverTimestamp(), // Record registration time for trial
-        lastSeen: serverTimestamp(),
+        location: null, // Default location to null
+        registrationTimestamp: serverTimestamp(), // Record registration time for trial period check
+        lastSeen: serverTimestamp(), // Initialize last seen timestamp
       });
 
       toast({
-        title: "Registration Successful",
-        description: "Your account has been created. Please wait for admin approval.",
+        title: "Registration Submitted",
+        description: "Your account has been created and submitted for admin approval. Enjoy your 1-week free trial!",
+        variant: "default",
       });
-      // No automatic sign-in after registration, user waits for approval.
-      // Optionally, sign the user out if Firebase auto-signs in: await signOut(auth);
-       registrationForm.reset(); // Clear the form
+      // User needs approval, so don't automatically log them in here.
+      // Firebase might auto-login, but the app logic should handle the unapproved state.
+       registrationForm.reset(); // Clear the form after successful submission
 
     } catch (err) {
-       if (err instanceof Error && 'code' in err) {
+       if (err instanceof Error && 'code' in err) { // Check if it's a Firebase Auth error
            setError(handleFirebaseAuthError(err as AuthError));
        } else {
            setError('An unexpected error occurred during registration.');
@@ -118,17 +124,20 @@ export default function DriverRegistrationForm() {
     }
   };
 
+  // Handle driver login
   const onLoginSubmit = async (data: LoginFormData) => {
     setLoading(true);
     setError(null);
     try {
       await signInWithEmailAndPassword(auth, data.email, data.password);
-      // Auth state change listener in Home component will handle redirect/UI update
+      // Successful login, the auth state listener in the main page (e.g., page.tsx)
+      // will handle the redirection or UI update based on approval status.
       toast({
         title: "Login Successful",
         description: "Welcome back!",
       });
        loginForm.reset(); // Clear the form
+      // No need to manually redirect here, let the auth listener handle it.
     } catch (err) {
        if (err instanceof Error && 'code' in err) {
            setError(handleFirebaseAuthError(err as AuthError));
@@ -137,7 +146,8 @@ export default function DriverRegistrationForm() {
            console.error(err);
        }
     } finally {
-      setLoading(false);
+       // Keep loading indicator briefly on success for smoother transition handled by auth listener
+       if (error) setLoading(false); // Only stop loading if there's an error to show
     }
   };
 
@@ -149,19 +159,19 @@ export default function DriverRegistrationForm() {
           <TabsTrigger value="register">Register</TabsTrigger>
         </TabsList>
 
-        {/* Login Tab */}
+        {/* Login Tab Content */}
         <TabsContent value="login">
-          <Card>
+          <Card className="shadow-md rounded-lg">
             <CardHeader>
-              <CardTitle>Driver Login</CardTitle>
-              <CardDescription>Access your CurbLink driver dashboard.</CardDescription>
+              <CardTitle className="text-2xl font-bold text-center">Driver Login</CardTitle>
+              <CardDescription className="text-center text-muted-foreground">Access your CurbLink driver dashboard.</CardDescription>
             </CardHeader>
             <form onSubmit={loginForm.handleSubmit(onLoginSubmit)}>
               <CardContent className="space-y-4">
                 {error && (
                   <Alert variant="destructive">
                     <AlertCircle className="h-4 w-4" />
-                    <AlertTitle>Error</AlertTitle>
+                    <AlertTitle>Login Error</AlertTitle>
                     <AlertDescription>{error}</AlertDescription>
                   </Alert>
                 )}
@@ -173,6 +183,7 @@ export default function DriverRegistrationForm() {
                     placeholder="driver@example.com"
                     {...loginForm.register('email')}
                     disabled={loading}
+                    aria-required="true"
                   />
                   {loginForm.formState.errors.email && (
                     <p className="text-xs text-destructive">{loginForm.formState.errors.email.message}</p>
@@ -186,6 +197,7 @@ export default function DriverRegistrationForm() {
                     placeholder="********"
                     {...loginForm.register('password')}
                     disabled={loading}
+                    aria-required="true"
                   />
                   {loginForm.formState.errors.password && (
                     <p className="text-xs text-destructive">{loginForm.formState.errors.password.message}</p>
@@ -193,27 +205,27 @@ export default function DriverRegistrationForm() {
                 </div>
               </CardContent>
               <CardFooter>
-                <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? 'Logging In...' : 'Login'}
+                <Button type="submit" className="w-full bg-primary text-primary-foreground hover:bg-primary/90" disabled={loading}>
+                  {loading ? <LoadingSpinner size="sm" /> : 'Login'}
                 </Button>
               </CardFooter>
             </form>
           </Card>
         </TabsContent>
 
-        {/* Registration Tab */}
+        {/* Registration Tab Content */}
         <TabsContent value="register">
-          <Card>
+          <Card className="shadow-md rounded-lg">
             <CardHeader>
-              <CardTitle>Driver Registration</CardTitle>
-              <CardDescription>Create your CurbLink driver account. Enjoy a 1-week free trial!</CardDescription>
+              <CardTitle className="text-2xl font-bold text-center">Driver Registration</CardTitle>
+              <CardDescription className="text-center text-muted-foreground">Create your account. Includes a 1-week free trial!</CardDescription>
             </CardHeader>
              <form onSubmit={registrationForm.handleSubmit(onRegisterSubmit)}>
               <CardContent className="space-y-4">
-                 {error && (
+                 {error && ( // Display registration-specific errors
                   <Alert variant="destructive">
                     <AlertCircle className="h-4 w-4" />
-                    <AlertTitle>Error</AlertTitle>
+                    <AlertTitle>Registration Error</AlertTitle>
                     <AlertDescription>{error}</AlertDescription>
                   </Alert>
                 )}
@@ -224,6 +236,7 @@ export default function DriverRegistrationForm() {
                     placeholder="John Doe"
                     {...registrationForm.register('name')}
                      disabled={loading}
+                     aria-required="true"
                   />
                   {registrationForm.formState.errors.name && (
                     <p className="text-xs text-destructive">{registrationForm.formState.errors.name.message}</p>
@@ -236,6 +249,7 @@ export default function DriverRegistrationForm() {
                     placeholder="e.g., Toyota Camry 2020, ABC-123"
                     {...registrationForm.register('vehicleDetails')}
                      disabled={loading}
+                     aria-required="true"
                   />
                   {registrationForm.formState.errors.vehicleDetails && (
                     <p className="text-xs text-destructive">{registrationForm.formState.errors.vehicleDetails.message}</p>
@@ -249,6 +263,7 @@ export default function DriverRegistrationForm() {
                     placeholder="driver@example.com"
                     {...registrationForm.register('email')}
                      disabled={loading}
+                     aria-required="true"
                   />
                    {registrationForm.formState.errors.email && (
                     <p className="text-xs text-destructive">{registrationForm.formState.errors.email.message}</p>
@@ -259,9 +274,10 @@ export default function DriverRegistrationForm() {
                   <Input
                     id="register-password"
                     type="password"
-                    placeholder="********"
+                    placeholder="Min. 6 characters"
                     {...registrationForm.register('password')}
                      disabled={loading}
+                     aria-required="true"
                   />
                    {registrationForm.formState.errors.password && (
                     <p className="text-xs text-destructive">{registrationForm.formState.errors.password.message}</p>
@@ -272,9 +288,10 @@ export default function DriverRegistrationForm() {
                   <Input
                     id="register-confirm-password"
                     type="password"
-                    placeholder="********"
+                    placeholder="Re-enter password"
                     {...registrationForm.register('confirmPassword')}
                      disabled={loading}
+                     aria-required="true"
                   />
                    {registrationForm.formState.errors.confirmPassword && (
                     <p className="text-xs text-destructive">{registrationForm.formState.errors.confirmPassword.message}</p>
@@ -282,8 +299,8 @@ export default function DriverRegistrationForm() {
                 </div>
               </CardContent>
               <CardFooter>
-                <Button type="submit" className="w-full" disabled={loading}>
-                   {loading ? 'Registering...' : 'Register'}
+                <Button type="submit" className="w-full bg-accent text-accent-foreground hover:bg-accent/90" disabled={loading}>
+                   {loading ? <LoadingSpinner size="sm" /> : 'Register'}
                 </Button>
               </CardFooter>
             </form>

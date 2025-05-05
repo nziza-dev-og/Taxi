@@ -1,87 +1,112 @@
 
-"use client"; // This component needs client-side interactivity
+"use client"; // This component needs client-side interactivity for auth state and potential location access
 
 import React, { useState, useEffect } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '@/config/firebase';
 import DriverRegistrationForm from '@/components/driver-registration-form';
-import DriverDashboard from '@/components/driver-dashboard';
+import DriverDashboard from '@/components/driver-dashboard'; // Assuming this will be created
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
-  const [isApproved, setIsApproved] = useState<boolean | null>(null); // null means loading/unknown
+  const [isApproved, setIsApproved] = useState<boolean | null>(null); // null = loading, false = not approved/trial expired, true = approved/trial active
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    setLoading(true); // Start loading whenever auth state might change
+
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setLoading(true);
       setUser(currentUser);
       if (currentUser) {
-        // Check approval status only if user is logged in
+        // User is logged in, check their status in Firestore
         const driverDocRef = doc(db, 'drivers', currentUser.uid);
         try {
           const docSnap = await getDoc(driverDocRef);
           if (docSnap.exists()) {
             const data = docSnap.data();
-            setIsApproved(data.isApproved || false); // Default to false if field doesn't exist
-             if (!data.isApproved) {
-               // Check for trial period only if not approved
-                const registrationDate = data.registrationTimestamp?.toDate();
+            // Explicitly check if approved
+            if (data.isApproved === true) {
+                setIsApproved(true);
+            } else {
+                // Not approved, check for trial period
+                const registrationDate = data.registrationTimestamp?.toDate(); // Convert Firestore Timestamp to JS Date
                 if (registrationDate) {
                     const oneWeekAgo = new Date();
-                    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+                    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7); // Calculate date 7 days ago
+
+                    // Check if registration date is within the last 7 days
                     if (registrationDate > oneWeekAgo) {
-                         // Still within free trial, treat as approved for dashboard access
-                        setIsApproved(true);
+                        // Still within the free trial period
+                        setIsApproved(true); // Treat as approved for dashboard access during trial
+                    } else {
+                        // Trial period expired and not approved
+                        setIsApproved(false);
                     }
+                } else {
+                     // Registration timestamp missing, assume not approved
+                     console.warn("Registration timestamp missing for driver:", currentUser.uid);
+                     setIsApproved(false);
                 }
-             }
+            }
           } else {
-            setIsApproved(false); // Driver document doesn't exist, not approved
+            // Driver document doesn't exist in Firestore - this shouldn't happen if registration worked
+            console.error("Driver document not found for logged-in user:", currentUser.uid);
+            setIsApproved(false); // Treat as not approved
+            // Optionally log the user out here: await signOut(auth); setUser(null);
           }
         } catch (error) {
-          console.error("Error checking driver approval:", error);
+          console.error("Error checking driver approval/trial status:", error);
           setIsApproved(false); // Assume not approved on error
         }
       } else {
-        setIsApproved(null); // No user, no approval status
+        // No user logged in
+        setIsApproved(null); // Reset approval state
       }
-      setLoading(false);
+      setLoading(false); // Finish loading after checking status
     });
 
     // Cleanup subscription on unmount
     return () => unsubscribe();
-  }, []);
+  }, []); // Run only once on mount
+
+  // --- Render Logic ---
 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <LoadingSpinner />
+        <LoadingSpinner size="lg" />
       </div>
     );
   }
 
   if (!user) {
-    // User is not logged in, show registration/login
+    // User is not logged in, show the registration/login form
     return <DriverRegistrationForm />;
   }
 
+  // User is logged in, check approval/trial status
   if (isApproved === false) {
-    // User logged in but not approved (and trial expired)
+    // User logged in but is not approved AND trial period has expired
     return (
       <div className="flex items-center justify-center min-h-screen p-4">
-        <Card className="w-full max-w-md">
+        <Card className="w-full max-w-md shadow-lg rounded-lg">
           <CardHeader>
-            <CardTitle className="text-center">Account Pending Approval</CardTitle>
+            <CardTitle className="text-center text-lg font-semibold">Account Pending / Trial Expired</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-center text-muted-foreground">
-              Your account registration is being reviewed by an administrator.
-              You will be notified once your account is approved. If your free trial has expired, please contact support.
+              Your account is either pending administrator review or your 1-week free trial has expired.
             </p>
+            <p className="text-center text-muted-foreground mt-2">
+                Please wait for approval or contact support to activate your subscription.
+            </p>
+            {/* Optionally add a logout button here */}
+             <Button variant="outline" onClick={() => auth.signOut()} className="mt-4 w-full">
+                 Logout
+             </Button>
           </CardContent>
         </Card>
       </div>
@@ -89,14 +114,21 @@ export default function Home() {
   }
 
   if (isApproved === true) {
-    // User logged in and approved (or within trial)
+    // User logged in and is approved OR is within the trial period
+    // Pass the user object to the dashboard
     return <DriverDashboard user={user} />;
   }
 
-  // Fallback case (should ideally not be reached if logic is sound)
-  return (
-      <div className="flex items-center justify-center min-h-screen">
-        <LoadingSpinner />
-      </div>
-  );
+  // Fallback/Initial loading state while isApproved is still null (after user is confirmed)
+  // This prevents briefly showing the registration form or pending message if the user is approved/in trial
+   if (user && isApproved === null) {
+      return (
+           <div className="flex items-center justify-center min-h-screen">
+                <LoadingSpinner size="lg"/>
+           </div>
+      );
+   }
+
+  // Should ideally not be reached if logic is sound, but acts as a safety net
+  return <DriverRegistrationForm />;
 }
