@@ -239,8 +239,8 @@ export default function CustomerDashboard({ customer }: CustomerDashboardProps) 
       setError(null);
 
       try {
-         // Define the data to be added, excluding 'id'
-          const rideDataToAdd = {
+         // Define the data to be added, excluding 'id' and 'createdAt'
+          const rideDataToAdd: Omit<RideRequest, 'id' | 'createdAt'> = {
               riderId: customer.uid,
               riderName: customer.name,
               riderPhone: customer.phone || undefined,
@@ -249,7 +249,7 @@ export default function CustomerDashboard({ customer }: CustomerDashboardProps) 
               destinationLocation: destinationLocation || undefined,
               destinationAddress: destinationAddress,
               status: 'pending' as const, // Use 'as const' for literal type
-              // Let Firestore handle createdAt automatically with serverTimestamp()
+              // Ensure other optional fields are undefined or null if not set
               driverId: null,
               driverName: undefined,
               vehicleDetails: undefined,
