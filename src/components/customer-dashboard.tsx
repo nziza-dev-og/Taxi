@@ -239,31 +239,25 @@ export default function CustomerDashboard({ customer }: CustomerDashboardProps) 
       setError(null);
 
       try {
-         // Define the data to be added, excluding 'id' and 'createdAt'
-          const rideDataToAdd: Omit<RideRequest, 'id' | 'createdAt'> = {
+         // Define the data to be added, ensuring no 'undefined' values are explicitly set
+          const rideDataToAdd = {
               riderId: customer.uid,
               riderName: customer.name,
-              riderPhone: customer.phone || undefined,
+              riderPhone: customer.phone || null, // Use null if phone is missing
               pickupLocation: pickupLocation,
               pickupAddress: pickupAddress,
-              destinationLocation: destinationLocation || undefined,
+              destinationLocation: destinationLocation || null, // Use null if destination location is missing
               destinationAddress: destinationAddress,
-              status: 'pending' as const, // Use 'as const' for literal type
-              // Ensure other optional fields are undefined or null if not set
-              driverId: null,
-              driverName: undefined,
-              vehicleDetails: undefined,
-              acceptedAt: undefined,
-              completedAt: undefined,
-              cancelledAt: undefined,
-              fare: estimatedFare ?? undefined,
+              status: 'pending' as const,
+              driverId: null, // Set explicitly to null for pending requests
+              fare: estimatedFare ?? null, // Use null if fare is not calculated yet
+              createdAt: serverTimestamp(), // Add server timestamp here
+              // Omit fields like driverName, vehicleDetails, acceptedAt, etc.
+              // They will not be added to Firestore if not present in the object
           };
 
-          // Add the document, including serverTimestamp for createdAt
-          const docRef = await addDoc(collection(db, 'rideRequests'), {
-              ...rideDataToAdd,
-              createdAt: serverTimestamp(), // Apply serverTimestamp during the addDoc call
-          });
+          // Add the document
+          const docRef = await addDoc(collection(db, 'rideRequests'), rideDataToAdd);
 
           toast({ title: 'Ride Requested!', description: 'Searching for a driver...' });
           // No need to manually set state here, listener will pick it up
