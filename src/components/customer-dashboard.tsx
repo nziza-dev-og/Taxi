@@ -162,7 +162,7 @@ export default function CustomerDashboard({ customer }: CustomerDashboardProps) 
 
   useEffect(() => {
       if (pickupAddress) {
-          debouncedGeocode(pickupAddress).then(location => {
+          debouncedGeocode(pickupAddress).then((location: GeoPoint | null) => { // Explicitly type location
               setPickupLocation(location);
               if (location && destinationLocation) estimateFare(location, destinationLocation);
           });
@@ -174,7 +174,7 @@ export default function CustomerDashboard({ customer }: CustomerDashboardProps) 
 
    useEffect(() => {
        if (destinationAddress) {
-           debouncedGeocode(destinationAddress).then(location => {
+           debouncedGeocode(destinationAddress).then((location: GeoPoint | null) => { // Explicitly type location
                setDestinationLocation(location);
                 if (pickupLocation && location) estimateFare(pickupLocation, location);
            });
@@ -449,3 +449,6 @@ export default function CustomerDashboard({ customer }: CustomerDashboardProps) 
     </div> // End grid container
   );
 }
+
+
+    
