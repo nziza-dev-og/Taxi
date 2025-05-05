@@ -239,26 +239,32 @@ export default function CustomerDashboard({ customer }: CustomerDashboardProps) 
       setError(null);
 
       try {
-          const newRideRequest: Omit<RideRequest, 'id' | 'createdAt'> = {
+         // Define the data to be added, excluding 'id'
+          const rideDataToAdd = {
               riderId: customer.uid,
               riderName: customer.name,
               riderPhone: customer.phone || undefined,
               pickupLocation: pickupLocation,
               pickupAddress: pickupAddress,
-              destinationLocation: destinationLocation || undefined, // Can be null if geocoding failed
+              destinationLocation: destinationLocation || undefined,
               destinationAddress: destinationAddress,
-              status: 'pending',
-              createdAt: serverTimestamp() as Timestamp, // Cast needed for serverTimestamp
-              // Ensure other optional fields are undefined or null if not set
+              status: 'pending' as const, // Use 'as const' for literal type
+              // Let Firestore handle createdAt automatically with serverTimestamp()
               driverId: null,
               driverName: undefined,
               vehicleDetails: undefined,
               acceptedAt: undefined,
               completedAt: undefined,
               cancelledAt: undefined,
-              fare: estimatedFare ?? undefined, // Use estimated fare if available
+              fare: estimatedFare ?? undefined,
           };
-          const docRef = await addDoc(collection(db, 'rideRequests'), newRideRequest);
+
+          // Add the document, including serverTimestamp for createdAt
+          const docRef = await addDoc(collection(db, 'rideRequests'), {
+              ...rideDataToAdd,
+              createdAt: serverTimestamp(), // Apply serverTimestamp during the addDoc call
+          });
+
           toast({ title: 'Ride Requested!', description: 'Searching for a driver...' });
           // No need to manually set state here, listener will pick it up
       } catch (err) {
