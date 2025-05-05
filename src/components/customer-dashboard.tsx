@@ -34,20 +34,29 @@ import type { Customer, RideRequest, Driver } from '@/types'; // Import shared t
 import { formatDistanceToNow } from 'date-fns'; // For relative time formatting
 // Removed Link import as footer nav is gone
 // Map component placeholder - replace with actual implementation
-const MapPlaceholder = () => <div className="h-64 w-full bg-muted rounded-lg flex items-center justify-center text-muted-foreground">Map Placeholder</div>;
+const MapPlaceholder = () => <div data-ai-hint="map wireframe" className="h-64 w-full bg-muted rounded-lg flex items-center justify-center text-muted-foreground">Map Placeholder</div>;
 
 
 interface CustomerDashboardProps {
   customer: Customer;
 }
 
-// Simple debounce function
-function debounce<F extends (...args: any[]) => any>(func: F, waitFor: number) {
+// Corrected debounce function for async functions
+function debounce<F extends (...args: any[]) => Promise<any>>(func: F, waitFor: number) {
   let timeout: NodeJS.Timeout;
-  return (...args: Parameters<F>): Promise<ReturnType<F>> =>
+  return (...args: Parameters<F>): Promise<Awaited<ReturnType<F>>> => // Return Promise of the resolved type
     new Promise(resolve => {
       clearTimeout(timeout);
-      timeout = setTimeout(() => resolve(func(...args)), waitFor);
+      timeout = setTimeout(async () => { // Make the inner function async
+        try {
+          const result = await func(...args); // Await the async function
+          resolve(result); // Resolve with the actual result
+        } catch (error) {
+           console.error("Error in debounced function:", error);
+           // Decide how to handle errors, maybe resolve with a specific value or reject
+           resolve(undefined as any); // Resolve with undefined on error or reject(error)
+        }
+      }, waitFor);
     });
 }
 
@@ -150,19 +159,23 @@ export default function CustomerDashboard({ customer }: CustomerDashboardProps) 
 
   const geocodeAddress = async (address: string): Promise<GeoPoint | null> => {
       if (!address) return null;
+      console.log(`Geocoding (placeholder): ${address}`);
       await new Promise(resolve => setTimeout(resolve, 300)); // Simulate API
-      const latOffset = (address.length % 10) * 0.001;
-      const lngOffset = (address.length % 5) * 0.001;
-      const baseLat = 34.0522; // Example coords
+      // Simple pseudo-random location based on address length for testing
+      const latOffset = (address.length % 10) * 0.001 * (Math.random() > 0.5 ? 1 : -1);
+      const lngOffset = (address.length % 5) * 0.001 * (Math.random() > 0.5 ? 1 : -1);
+      const baseLat = 34.0522; // Example coords (Los Angeles)
       const baseLng = -118.2437;
       return new GeoPoint(baseLat + latOffset, baseLng + lngOffset);
   };
 
-   const debouncedGeocode = useCallback(debounce(geocodeAddress, 800), []);
+   // Use useCallback to memoize the debounced function itself
+   const debouncedGeocode = useCallback(debounce(geocodeAddress, 800), []); // Empty dependency array means it's created once
 
   useEffect(() => {
       if (pickupAddress) {
-          debouncedGeocode(pickupAddress).then((location: GeoPoint | null) => { // Explicitly type location
+          // .then() now correctly receives GeoPoint | null
+          debouncedGeocode(pickupAddress).then((location: GeoPoint | null) => {
               setPickupLocation(location);
               if (location && destinationLocation) estimateFare(location, destinationLocation);
           });
@@ -170,11 +183,14 @@ export default function CustomerDashboard({ customer }: CustomerDashboardProps) 
           setPickupLocation(null);
           setEstimatedFare(null);
       }
-  }, [pickupAddress, destinationLocation, debouncedGeocode]); // Added destinationLocation dependency
+      // Dependency array only includes pickupAddress and destinationLocation
+      // as debouncedGeocode itself is stable due to useCallback.
+  }, [pickupAddress, destinationLocation, debouncedGeocode]);
 
    useEffect(() => {
        if (destinationAddress) {
-           debouncedGeocode(destinationAddress).then((location: GeoPoint | null) => { // Explicitly type location
+           // .then() now correctly receives GeoPoint | null
+           debouncedGeocode(destinationAddress).then((location: GeoPoint | null) => {
                setDestinationLocation(location);
                 if (pickupLocation && location) estimateFare(pickupLocation, location);
            });
@@ -182,18 +198,20 @@ export default function CustomerDashboard({ customer }: CustomerDashboardProps) 
            setDestinationLocation(null);
             setEstimatedFare(null);
        }
-   }, [destinationAddress, pickupLocation, debouncedGeocode]); // Added pickupLocation dependency
+       // Dependency array only includes destinationAddress and pickupLocation.
+   }, [destinationAddress, pickupLocation, debouncedGeocode]);
 
 
   const estimateFare = async (pickup: GeoPoint, destination: GeoPoint) => {
     console.log('Estimating fare (placeholder)...');
      await new Promise(resolve => setTimeout(resolve, 200)); // Simulate calc
+    // Very basic distance approximation (Haversine formula would be better)
     const latDiff = Math.abs(pickup.latitude - destination.latitude);
     const lonDiff = Math.abs(pickup.longitude - destination.longitude);
-    const distanceApproximation = Math.sqrt(latDiff * latDiff + lonDiff * lonDiff) * 100;
+    const distanceApproximation = Math.sqrt(latDiff * latDiff + lonDiff * lonDiff) * 111; // Approx km per degree
     const baseFare = 5;
-    const ratePerUnit = 1.5;
-    const fare = baseFare + distanceApproximation * ratePerUnit;
+    const ratePerKm = 1.5;
+    const fare = baseFare + distanceApproximation * ratePerKm;
     setEstimatedFare(parseFloat(fare.toFixed(2)));
   };
 
@@ -203,7 +221,7 @@ export default function CustomerDashboard({ customer }: CustomerDashboardProps) 
       e.preventDefault();
       if (!pickupAddress || !destinationAddress || !pickupLocation) {
           setError('Please enter both pickup and destination addresses.');
-          toast({ title: 'Missing Information', description: 'Enter pickup and destination.', variant: 'destructive' });
+          toast({ title: 'Missing Information', description: 'Enter valid pickup and destination.', variant: 'destructive' });
           return;
       }
        if (currentRide && currentRide.status !== 'completed' && currentRide.status !== 'cancelled') {
@@ -223,13 +241,22 @@ export default function CustomerDashboard({ customer }: CustomerDashboardProps) 
               riderPhone: customer.phone || undefined,
               pickupLocation: pickupLocation,
               pickupAddress: pickupAddress,
-              destinationLocation: destinationLocation || undefined,
+              destinationLocation: destinationLocation || undefined, // Can be null if geocoding failed
               destinationAddress: destinationAddress,
               status: 'pending',
-              createdAt: serverTimestamp() as Timestamp,
+              createdAt: serverTimestamp() as Timestamp, // Cast needed for serverTimestamp
+              // Ensure other optional fields are undefined or null if not set
+              driverId: null,
+              driverName: undefined,
+              vehicleDetails: undefined,
+              acceptedAt: undefined,
+              completedAt: undefined,
+              cancelledAt: undefined,
+              fare: estimatedFare ?? undefined, // Use estimated fare if available
           };
           const docRef = await addDoc(collection(db, 'rideRequests'), newRideRequest);
           toast({ title: 'Ride Requested!', description: 'Searching for a driver...' });
+          // No need to manually set state here, listener will pick it up
       } catch (err) {
           console.error("Error requesting ride:", err);
           setError('Failed to request ride.');
@@ -254,7 +281,8 @@ export default function CustomerDashboard({ customer }: CustomerDashboardProps) 
       try {
            await updateDoc(rideDocRef, { status: 'cancelled', cancelledAt: serverTimestamp() });
           toast({ title: 'Ride Cancelled', description: 'Your ride request has been cancelled.' });
-          setCurrentRide(null);
+          // Clear local state immediately for better UX, listener will confirm
+           setCurrentRide(null);
            setFindingDriver(false);
            setPickupAddress('');
            setDestinationAddress('');
@@ -338,7 +366,12 @@ export default function CustomerDashboard({ customer }: CustomerDashboardProps) 
                                       onChange={(e) => setPickupAddress(e.target.value)}
                                       disabled={loading || findingDriver} // Disable when finding too
                                       required
+                                      aria-invalid={!pickupLocation && pickupAddress.length > 0 ? "true" : "false"}
+                                      aria-describedby="pickup-location-status"
                                   />
+                                  <p id="pickup-location-status" className="text-xs text-muted-foreground">
+                                     {pickupAddress && !pickupLocation ? 'Geocoding...' : pickupLocation ? 'Location confirmed.' : 'Enter address.'}
+                                  </p>
                               </div>
                               <div className="space-y-2">
                                   <Label htmlFor="destination-address">Destination Address</Label>
@@ -349,14 +382,19 @@ export default function CustomerDashboard({ customer }: CustomerDashboardProps) 
                                       onChange={(e) => setDestinationAddress(e.target.value)}
                                       disabled={loading || findingDriver} // Disable when finding too
                                       required
+                                      aria-invalid={!destinationLocation && destinationAddress.length > 0 ? "true" : "false"}
+                                      aria-describedby="destination-location-status"
                                   />
+                                   <p id="destination-location-status" className="text-xs text-muted-foreground">
+                                      {destinationAddress && !destinationLocation ? 'Geocoding...' : destinationLocation ? 'Location confirmed.' : 'Enter address.'}
+                                  </p>
                               </div>
                               {estimatedFare !== null && (
                                   <p className="text-sm font-medium">Estimated Fare: <span className="text-primary">${estimatedFare.toFixed(2)}</span></p>
                               )}
                           </CardContent>
                           <CardFooter>
-                              <Button type="submit" className="w-full bg-primary text-primary-foreground hover:bg-primary/90" disabled={loading || findingDriver || !pickupLocation || !destinationAddress}>
+                              <Button type="submit" className="w-full bg-primary text-primary-foreground hover:bg-primary/90" disabled={loading || findingDriver || !pickupLocation || !destinationAddress || !destinationLocation}>
                                   {findingDriver ? <><LoadingSpinner size="sm" className="mr-2"/> Finding Driver...</> : loading ? <LoadingSpinner size="sm" /> : 'Request Ride'}
                               </Button>
                           </CardFooter>
@@ -364,35 +402,55 @@ export default function CustomerDashboard({ customer }: CustomerDashboardProps) 
                   </Card>
               ) : (
                   // --- Current Ride Status Card ---
-                  <Card className={`shadow-md rounded-lg border-l-4 ${currentRide.status === 'pending' ? 'border-yellow-500' : currentRide.status === 'accepted' || currentRide.status === 'ongoing' ? 'border-green-500' : 'border-muted'}`}>
+                  <Card className={`shadow-md rounded-lg border-l-4 ${
+                     currentRide.status === 'pending' ? 'border-yellow-500' :
+                     currentRide.status === 'accepted' || currentRide.status === 'ongoing' ? 'border-green-500' :
+                     currentRide.status === 'cancelled' ? 'border-red-500' :
+                     currentRide.status === 'completed' ? 'border-blue-500' :
+                     'border-muted'
+                    }`}>
                      <CardHeader>
                           <CardTitle className="flex items-center gap-2">
                               {currentRide.status === 'pending' && <><Clock className="h-5 w-5 text-yellow-500 animate-pulse"/> Finding Driver...</>}
                               {(currentRide.status === 'accepted' || currentRide.status === 'ongoing') && <><Car className="h-5 w-5 text-green-500"/> Driver Assigned</>}
+                              {currentRide.status === 'cancelled' && <><XCircle className="h-5 w-5 text-red-500"/> Ride Cancelled</>}
+                              {currentRide.status === 'completed' && <><CheckCircle className="h-5 w-5 text-blue-500"/> Ride Completed</>}
                           </CardTitle>
                           <CardDescription>
                               {currentRide.status === 'pending' && 'We are looking for a driver near you.'}
-                               {currentRide.status === 'accepted' && `Your driver ${currentRide.driverName || ''} is on the way.`}
-                               {currentRide.status === 'ongoing' && `Your ride with ${currentRide.driverName || ''} is in progress.`}
+                               {currentRide.status === 'accepted' && `Your driver ${currentRide.driverName || '...'} is on the way.`}
+                               {currentRide.status === 'ongoing' && `Your ride with ${currentRide.driverName || '...'} is in progress.`}
+                               {currentRide.status === 'cancelled' && 'This ride request was cancelled.'}
+                               {currentRide.status === 'completed' && 'This ride has been completed.'}
                           </CardDescription>
                      </CardHeader>
                       <CardContent className="space-y-2">
                           <p><span className="font-medium">From:</span> {currentRide.pickupAddress}</p>
                           <p><span className="font-medium">To:</span> {currentRide.destinationAddress}</p>
-                           {(currentRide.status === 'accepted' || currentRide.status === 'ongoing') && currentRide.driverName && (
+                           {(currentRide.status === 'accepted' || currentRide.status === 'ongoing' || currentRide.status === 'completed') && currentRide.driverName && (
                                <>
                                    <p><span className="font-medium">Driver:</span> {currentRide.driverName}</p>
                                    {currentRide.vehicleDetails && <p><span className="font-medium">Vehicle:</span> {currentRide.vehicleDetails}</p>}
                                </>
                            )}
                            <p><span className="font-medium">Status:</span> <span className="capitalize font-semibold">{currentRide.status}</span></p>
+                           {currentRide.fare && currentRide.status === 'completed' &&
+                               <p className="font-medium">Final Fare: <span className="text-primary">${currentRide.fare.toFixed(2)}</span></p>
+                            }
                            {currentRide.acceptedAt && currentRide.status === 'accepted' &&
                              <p className="text-xs text-muted-foreground">Accepted {formatRelativeTime(currentRide.acceptedAt)}</p>
                            }
                            {currentRide.createdAt &&
                              <p className="text-xs text-muted-foreground">Requested {formatRelativeTime(currentRide.createdAt)}</p>
                            }
+                            {currentRide.cancelledAt && currentRide.status === 'cancelled' &&
+                             <p className="text-xs text-muted-foreground">Cancelled {formatRelativeTime(currentRide.cancelledAt)}</p>
+                           }
+                           {currentRide.completedAt && currentRide.status === 'completed' &&
+                             <p className="text-xs text-muted-foreground">Completed {formatRelativeTime(currentRide.completedAt)}</p>
+                           }
                       </CardContent>
+                      {/* Show cancel button only if pending or accepted */}
                       {(currentRide.status === 'pending' || currentRide.status === 'accepted') && (
                           <CardFooter className="flex justify-end">
                                <Button
@@ -404,6 +462,22 @@ export default function CustomerDashboard({ customer }: CustomerDashboardProps) 
                                </Button>
                           </CardFooter>
                       )}
+                      {/* Optionally add a "Book Again" button for completed/cancelled rides */}
+                       {(currentRide.status === 'completed' || currentRide.status === 'cancelled') && (
+                           <CardFooter className="flex justify-end">
+                               <Button
+                                   variant="outline"
+                                   onClick={() => {
+                                       setCurrentRide(null); // Clear the completed/cancelled ride
+                                       // Optionally pre-fill addresses for re-booking
+                                       // setPickupAddress(currentRide.pickupAddress);
+                                       // setDestinationAddress(currentRide.destinationAddress);
+                                   }}
+                               >
+                                  Book New Ride
+                               </Button>
+                           </CardFooter>
+                       )}
                   </Card>
               )}
 
@@ -423,15 +497,19 @@ export default function CustomerDashboard({ customer }: CustomerDashboardProps) 
                            <p className="text-center text-muted-foreground py-4">No past rides found.</p>
                        ) : (
                            rideHistory.map(ride => (
-                               <div key={ride.id} className="border p-3 rounded-md bg-muted/20">
+                               <div key={ride.id} className="border p-3 rounded-md bg-muted/20 hover:bg-muted/40 transition-colors">
                                     <div className="flex justify-between items-center mb-1">
-                                        <span className={`text-xs font-semibold capitalize px-2 py-0.5 rounded-full ${ride.status === 'completed' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-200' : 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200'}`}>
+                                        <span className={`text-xs font-semibold capitalize px-2 py-0.5 rounded-full ${
+                                            ride.status === 'completed' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-200' :
+                                            ride.status === 'cancelled' ? 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200' :
+                                            'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200' // Fallback for other potential statuses
+                                            }`}>
                                            {ride.status}
                                         </span>
                                         <span className="text-xs text-muted-foreground">{formatRelativeTime(ride.completedAt || ride.cancelledAt || ride.createdAt)}</span>
                                    </div>
-                                   <p className="text-sm font-medium truncate">To: {ride.destinationAddress}</p>
-                                   <p className="text-xs text-muted-foreground truncate">From: {ride.pickupAddress}</p>
+                                   <p className="text-sm font-medium truncate" title={ride.destinationAddress}>To: {ride.destinationAddress}</p>
+                                   <p className="text-xs text-muted-foreground truncate" title={ride.pickupAddress}>From: {ride.pickupAddress}</p>
                                    {ride.driverName && <p className="text-xs text-muted-foreground">Driver: {ride.driverName}</p>}
                                    {ride.fare && <p className="text-xs text-muted-foreground">Fare: ${ride.fare.toFixed(2)}</p>}
                                </div>
@@ -449,6 +527,3 @@ export default function CustomerDashboard({ customer }: CustomerDashboardProps) 
     </div> // End grid container
   );
 }
-
-
-    
