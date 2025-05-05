@@ -1,27 +1,44 @@
 
-import type { Metadata } from 'next';
-import '../globals.css'; // Use the main global styles
-import { Toaster } from "@/components/ui/toaster"; // Ensure Toaster is available
+'use client'; // Required for hooks like useState, useEffect, usePathname
 
-export const metadata: Metadata = {
-  title: 'CurbLink Customer', // Customer-specific title
-  description: 'Book and manage your taxi rides with CurbLink.', // Customer-specific description
-};
+import React, { useState, useEffect } from 'react';
+import { onAuthStateChanged, User } from 'firebase/auth';
+import { auth } from '@/config/firebase';
+import AppNavigation from '@/components/app-navigation'; // Import the new navigation component
+import '../globals.css';
+
+// Metadata can be static or dynamic
+// export const metadata: Metadata = { ... };
 
 export default function CustomerLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  return (
-    // The <html> and <body> tags are provided by the RootLayout (src/app/layout.tsx)
-    // This layout component wraps the content specific to the /customer/* routes.
-    <>
-        {/* The actual page content for /customer/* routes will be rendered here */}
-        {children}
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
 
-        {/* Toaster is already in RootLayout, no need to repeat unless specifically needed here */}
-        {/* <Toaster /> */}
-    </>
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      setLoading(false);
+    });
+    return () => unsubscribe(); // Cleanup subscription
+  }, []);
+
+  // Optional: Add a loading state for the layout
+  // if (loading) {
+  //   return <div>Loading customer section...</div>;
+  // }
+
+  return (
+    <div className="flex min-h-screen w-full flex-col bg-muted/40">
+      {/* Include the AppNavigation component here */}
+      <AppNavigation user={user} />
+      <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
+         {children} {/* The actual customer page content */}
+      </main>
+       {/* Remove the footer navigation if it was previously here */}
+    </div>
   );
 }

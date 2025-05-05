@@ -1,37 +1,45 @@
 
-import type { Metadata } from 'next';
-// Import fonts if needed, or rely on RootLayout's fonts
-// import { GeistSans } from 'geist/font/sans';
-// import { GeistMono } from 'geist/font/mono';
-import '../globals.css'; // Use the main global styles
-import { Toaster } from "@/components/ui/toaster"; // Ensure Toaster is available if not in RootLayout
+'use client'; // Required for hooks like useState, useEffect, usePathname
 
-// Example of applying fonts if specific ones are needed for admin
-// const geistSans = GeistSans;
-// const geistMono = GeistMono;
+import React, { useState, useEffect } from 'react';
+import { onAuthStateChanged, User } from 'firebase/auth';
+import { auth } from '@/config/firebase';
+import AppNavigation from '@/components/app-navigation'; // Import the new navigation component
+import '../globals.css';
 
-export const metadata: Metadata = {
-  title: 'CurbLink Admin', // Admin-specific title
-  description: 'Manage drivers, rides, and platform settings for CurbLink.', // Admin-specific description
-};
+// Metadata should ideally be defined outside the component if static,
+// or dynamically generated if needed. For simplicity, we keep it here.
+// export const metadata: Metadata = { ... }; // Keep metadata if needed
 
 export default function AdminLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  return (
-    // The <html> and <body> tags are provided by the RootLayout (src/app/layout.tsx)
-    // This layout component wraps the content specific to the /admin/* routes.
-    // No need to repeat <html>, <body>, or global font variables here.
-    <>
-        {/* The actual page content for /admin/* routes will be rendered here */}
-        {children}
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
 
-        {/* You could include an admin-specific Toaster instance if needed,
-            but usually, the one in RootLayout is sufficient. */}
-        {/* <Toaster /> */}
-    </>
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      setLoading(false);
+    });
+    return () => unsubscribe(); // Cleanup subscription
+  }, []);
+
+  // Optional: Add a loading state for the layout itself if needed
+  // if (loading) {
+  //   return <div>Loading admin section...</div>;
+  // }
+
+  return (
+    <div className="flex min-h-screen w-full flex-col bg-muted/40">
+      {/* Include the AppNavigation component here */}
+      <AppNavigation user={user} />
+      <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
+        {children} {/* The actual admin page content */}
+      </main>
+      {/* Remove the footer navigation if it was previously here */}
+    </div>
   );
 }
-

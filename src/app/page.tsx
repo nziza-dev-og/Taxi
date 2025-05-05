@@ -1,136 +1,17 @@
 
-"use client"; // This component needs client-side interactivity for auth state and potential location access
-
-import React, { useState, useEffect } from 'react';
-import { onAuthStateChanged, User } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
-import { auth, db } from '@/config/firebase';
-import DriverRegistrationForm from '@/components/driver-registration-form';
-import DriverDashboard from '@/components/driver-dashboard'; // Assuming this will be created
-import { LoadingSpinner } from '@/components/ui/loading-spinner';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button'; // Correct import for Button
-
-
-export default function Home() {
-  const [user, setUser] = useState<User | null>(null);
-  const [isApproved, setIsApproved] = useState<boolean | null>(null); // null = loading, false = not approved/trial expired, true = approved/trial active
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    setLoading(true); // Start loading whenever auth state might change
-
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setUser(currentUser);
-      if (currentUser) {
-        // User is logged in, check their status in Firestore
-        const driverDocRef = doc(db, 'drivers', currentUser.uid);
-        try {
-          const docSnap = await getDoc(driverDocRef);
-          if (docSnap.exists()) {
-            const data = docSnap.data();
-            // Explicitly check if approved
-            if (data.isApproved === true) {
-                setIsApproved(true);
-            } else {
-                // Not approved, check for trial period
-                const registrationDate = data.registrationTimestamp?.toDate(); // Convert Firestore Timestamp to JS Date
-                if (registrationDate) {
-                    const oneWeekAgo = new Date();
-                    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7); // Calculate date 7 days ago
-
-                    // Check if registration date is within the last 7 days
-                    if (registrationDate > oneWeekAgo) {
-                        // Still within the free trial period
-                        setIsApproved(true); // Treat as approved for dashboard access during trial
-                    } else {
-                        // Trial period expired and not approved
-                        setIsApproved(false);
-                    }
-                } else {
-                     // Registration timestamp missing, assume not approved
-                     console.warn("Registration timestamp missing for driver:", currentUser.uid);
-                     setIsApproved(false);
-                }
-            }
-          } else {
-            // Driver document doesn't exist in Firestore - this shouldn't happen if registration worked
-            console.error("Driver document not found for logged-in user:", currentUser.uid);
-            setIsApproved(false); // Treat as not approved
-            // Optionally log the user out here: await signOut(auth); setUser(null);
-          }
-        } catch (error) {
-          console.error("Error checking driver approval/trial status:", error);
-          setIsApproved(false); // Assume not approved on error
-        }
-      } else {
-        // No user logged in
-        setIsApproved(null); // Reset approval state
-      }
-      setLoading(false); // Finish loading after checking status
-    });
-
-    // Cleanup subscription on unmount
-    return () => unsubscribe();
-  }, []); // Run only once on mount
-
-  // --- Render Logic ---
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <LoadingSpinner size="lg" />
-      </div>
+// This page is intentionally left blank or can be used for a future landing page.
+// The driver functionality is now under the (driver) route group at /
+// Default export required by Next.js
+export default function LandingPage() {
+  return (
+    <div className="flex items-center justify-center min-h-screen">
+        <p>Welcome to CurbLink! Redirecting or loading...</p>
+        {/* Or implement a proper landing page here */}
+         {/* Example links (remove if not needed)
+            <Link href="/">Driver</Link>
+            <Link href="/customer">Customer</Link>
+            <Link href="/admin">Admin</Link>
+         */}
+    </div>
     );
-  }
-
-  if (!user) {
-    // User is not logged in, show the registration/login form
-    return <DriverRegistrationForm />;
-  }
-
-  // User is logged in, check approval/trial status
-  if (isApproved === false) {
-    // User logged in but is not approved AND trial period has expired
-    return (
-      <div className="flex items-center justify-center min-h-screen p-4">
-        <Card className="w-full max-w-md shadow-lg rounded-lg">
-          <CardHeader>
-            <CardTitle className="text-center text-lg font-semibold">Account Pending / Trial Expired</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-center text-muted-foreground">
-              Your account is either pending administrator review or your 1-week free trial has expired.
-            </p>
-            <p className="text-center text-muted-foreground mt-2">
-                Please wait for approval or contact support to activate your subscription.
-            </p>
-            {/* Optionally add a logout button here */}
-             <Button variant="outline" onClick={() => auth.signOut()} className="mt-4 w-full">
-                 Logout
-             </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  if (isApproved === true) {
-    // User logged in and is approved OR is within the trial period
-    // Pass the user object to the dashboard
-    return <DriverDashboard user={user} />;
-  }
-
-  // Fallback/Initial loading state while isApproved is still null (after user is confirmed)
-  // This prevents briefly showing the registration form or pending message if the user is approved/in trial
-   if (user && isApproved === null) {
-      return (
-           <div className="flex items-center justify-center min-h-screen">
-                <LoadingSpinner size="lg"/>
-           </div>
-      );
-   }
-
-  // Should ideally not be reached if logic is sound, but acts as a safety net
-  return <DriverRegistrationForm />;
 }

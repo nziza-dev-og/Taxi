@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { signOut } from 'firebase/auth';
+// Removed signOut as it's handled by AppNavigation
 import {
   doc,
   getDoc,
@@ -19,20 +19,20 @@ import {
   updateDoc,
   deleteDoc
 } from 'firebase/firestore';
-import { auth, db } from '@/config/firebase';
+import { db } from '@/config/firebase'; // Removed auth as it's not directly used here anymore
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Map, MapPin, Car, LogOut, Clock, CheckCircle, XCircle, Search, History, ShieldCheck, User as UserIcon } from 'lucide-react'; // Added Search, History, ShieldCheck, UserIcon
+// Removed Avatar components, LogOut, UserIcon, ShieldCheck as they are in AppNavigation or not needed directly
+import { Map, MapPin, Car, Clock, CheckCircle, XCircle, Search, History } from 'lucide-react';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle } from 'lucide-react';
 import type { Customer, RideRequest, Driver } from '@/types'; // Import shared types
 import { formatDistanceToNow } from 'date-fns'; // For relative time formatting
-import Link from 'next/link'; // Import Link for navigation
+// Removed Link import as footer nav is gone
 // Map component placeholder - replace with actual implementation
 const MapPlaceholder = () => <div className="h-64 w-full bg-muted rounded-lg flex items-center justify-center text-muted-foreground">Map Placeholder</div>;
 
@@ -56,26 +56,25 @@ export default function CustomerDashboard({ customer }: CustomerDashboardProps) 
   const [destinationAddress, setDestinationAddress] = useState('');
   const [pickupLocation, setPickupLocation] = useState<GeoPoint | null>(null);
   const [destinationLocation, setDestinationLocation] = useState<GeoPoint | null>(null);
-  const [currentRide, setCurrentRide] = useState<RideRequest | null>(null); // Track ongoing or pending ride
+  const [currentRide, setCurrentRide] = useState<RideRequest | null>(null);
   const [rideHistory, setRideHistory] = useState<RideRequest[]>([]);
-  const [nearbyDrivers, setNearbyDrivers] = useState<Driver[]>([]); // Display nearby available drivers
-  const [loading, setLoading] = useState(false); // For ride request/cancellation actions
+  const [nearbyDrivers, setNearbyDrivers] = useState<Driver[]>([]);
+  const [loading, setLoading] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [estimatedFare, setEstimatedFare] = useState<number | null>(null);
-  const [findingDriver, setFindingDriver] = useState(false); // Indicator while searching for a driver
+  const [findingDriver, setFindingDriver] = useState(false);
   const { toast } = useToast();
 
   // --- Data Fetching and Listeners ---
 
-   // Fetch and listen for the customer's CURRENT ride (pending or accepted/ongoing)
    useEffect(() => {
     const q = query(
       collection(db, 'rideRequests'),
       where('riderId', '==', customer.uid),
-      where('status', 'in', ['pending', 'accepted', 'ongoing']), // Listen for active ride states
+      where('status', 'in', ['pending', 'accepted', 'ongoing']),
       orderBy('createdAt', 'desc'),
-      limit(1) // Should only be one active ride per customer
+      limit(1)
     );
 
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
@@ -83,22 +82,16 @@ export default function CustomerDashboard({ customer }: CustomerDashboardProps) 
             const rideDoc = querySnapshot.docs[0];
             const rideData = { id: rideDoc.id, ...rideDoc.data() } as RideRequest;
             setCurrentRide(rideData);
-            setFindingDriver(rideData.status === 'pending'); // Show finding indicator if pending
-             // Clear input fields if a ride is active
+            setFindingDriver(rideData.status === 'pending');
              if (rideData.status === 'pending' || rideData.status === 'accepted' || rideData.status === 'ongoing') {
                  setPickupAddress(rideData.pickupAddress);
                  setDestinationAddress(rideData.destinationAddress);
                  setPickupLocation(rideData.pickupLocation);
-                 setDestinationLocation(rideData.destinationLocation || null); // Handle optional destination
+                 setDestinationLocation(rideData.destinationLocation || null);
             }
         } else {
-            setCurrentRide(null); // No active ride found
+            setCurrentRide(null);
             setFindingDriver(false);
-             // Optionally clear fields when no active ride, or keep them for re-booking?
-             // setPickupAddress('');
-             // setDestinationAddress('');
-             // setPickupLocation(null);
-             // setDestinationLocation(null);
         }
     }, (err) => {
         console.error("Error listening to current ride:", err);
@@ -109,7 +102,6 @@ export default function CustomerDashboard({ customer }: CustomerDashboardProps) 
   }, [customer.uid]);
 
 
-   // Fetch Ride History (Completed/Cancelled)
    const fetchRideHistory = useCallback(async () => {
        setLoadingHistory(true);
        setError(null);
@@ -117,11 +109,11 @@ export default function CustomerDashboard({ customer }: CustomerDashboardProps) 
            const q = query(
                collection(db, 'rideRequests'),
                where('riderId', '==', customer.uid),
-               where('status', 'in', ['completed', 'cancelled']), // Fetch only finished rides
+               where('status', 'in', ['completed', 'cancelled']),
                orderBy('createdAt', 'desc'),
-               limit(10) // Limit history for performance
+               limit(10)
            );
-           const querySnapshot = await getDoc(q); // Use getDoc for one-time fetch if real-time isn't needed
+           const querySnapshot = await getDoc(q); // Use getDoc for one-time fetch
            const history = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as RideRequest));
            setRideHistory(history);
        } catch (err) {
@@ -134,56 +126,39 @@ export default function CustomerDashboard({ customer }: CustomerDashboardProps) 
 
    useEffect(() => {
        fetchRideHistory();
-   }, [fetchRideHistory]); // Fetch history on mount
+   }, [fetchRideHistory]);
 
-  // Listen for nearby available drivers (Example - replace with actual GeoQuery)
   useEffect(() => {
-    // !! IMPORTANT !!
-    // This is a placeholder. Real-time GeoQueries require Firestore extensions (like GeoFirestore)
-    // or complex manual querying which is inefficient at scale.
-    // This example simulates finding drivers but is NOT scalable.
+    // Placeholder GeoQuery
     const q = query(
       collection(db, 'drivers'),
       where('isAvailable', '==', true),
       where('isApproved', '==', true),
-      limit(5) // Simulate finding a few nearby drivers
+      limit(5)
     );
-
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const drivers = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as Driver));
       setNearbyDrivers(drivers);
-      // Update map markers based on 'drivers' data here
     }, (err) => {
       console.error("Error fetching nearby drivers:", err);
-      // Don't necessarily show a blocking error for this background task
     });
-
     return () => unsubscribe();
-  }, []); // Run only on mount
+  }, []);
 
   // --- Geocoding and Fare Estimation (Placeholders) ---
 
-  // Placeholder for geocoding address to coordinates
   const geocodeAddress = async (address: string): Promise<GeoPoint | null> => {
       if (!address) return null;
-      console.log(`Geocoding (placeholder): ${address}`);
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 300));
-      // In a real app, use Google Geocoding API or similar
-      // For this example, return slightly varied coordinates based on address length
+      await new Promise(resolve => setTimeout(resolve, 300)); // Simulate API
       const latOffset = (address.length % 10) * 0.001;
       const lngOffset = (address.length % 5) * 0.001;
-      // Base coordinates (e.g., center of a city) - Replace with actual base
-      const baseLat = 34.0522;
+      const baseLat = 34.0522; // Example coords
       const baseLng = -118.2437;
       return new GeoPoint(baseLat + latOffset, baseLng + lngOffset);
   };
 
-  // Debounced geocoding function
    const debouncedGeocode = useCallback(debounce(geocodeAddress, 800), []);
 
-
-  // Update pickup location when address changes (debounced)
   useEffect(() => {
       if (pickupAddress) {
           debouncedGeocode(pickupAddress).then(location => {
@@ -192,11 +167,10 @@ export default function CustomerDashboard({ customer }: CustomerDashboardProps) 
           });
       } else {
           setPickupLocation(null);
-          setEstimatedFare(null); // Clear fare if pickup is cleared
+          setEstimatedFare(null);
       }
-  }, [pickupAddress, debouncedGeocode]); // Rerun when pickupAddress or the debounced function changes
+  }, [pickupAddress, destinationLocation, debouncedGeocode]); // Added destinationLocation dependency
 
-  // Update destination location when address changes (debounced)
    useEffect(() => {
        if (destinationAddress) {
            debouncedGeocode(destinationAddress).then(location => {
@@ -205,33 +179,27 @@ export default function CustomerDashboard({ customer }: CustomerDashboardProps) 
            });
        } else {
            setDestinationLocation(null);
-            setEstimatedFare(null); // Clear fare if destination is cleared
+            setEstimatedFare(null);
        }
-   }, [destinationAddress, debouncedGeocode]); // Rerun when destinationAddress or the debounced function changes
+   }, [destinationAddress, pickupLocation, debouncedGeocode]); // Added pickupLocation dependency
 
 
-  // Placeholder for fare estimation
   const estimateFare = async (pickup: GeoPoint, destination: GeoPoint) => {
     console.log('Estimating fare (placeholder)...');
-     // Simulate calculation delay
-     await new Promise(resolve => setTimeout(resolve, 200));
-    // Basic distance calculation (Haversine formula or simple approximation)
-    // Replace with Google Distance Matrix API for real routes and traffic
+     await new Promise(resolve => setTimeout(resolve, 200)); // Simulate calc
     const latDiff = Math.abs(pickup.latitude - destination.latitude);
     const lonDiff = Math.abs(pickup.longitude - destination.longitude);
-    const distanceApproximation = Math.sqrt(latDiff * latDiff + lonDiff * lonDiff) * 100; // Rough estimate factor
-
-    const baseFare = 5; // $5 base
-    const ratePerUnit = 1.5; // $1.5 per distance unit
+    const distanceApproximation = Math.sqrt(latDiff * latDiff + lonDiff * lonDiff) * 100;
+    const baseFare = 5;
+    const ratePerUnit = 1.5;
     const fare = baseFare + distanceApproximation * ratePerUnit;
-    setEstimatedFare(parseFloat(fare.toFixed(2))); // Format to 2 decimal places
+    setEstimatedFare(parseFloat(fare.toFixed(2)));
   };
 
   // --- Actions ---
 
-  // Handle Ride Request Submission
   const handleRequestRide = async (e: React.FormEvent) => {
-      e.preventDefault(); // Prevent default form submission
+      e.preventDefault();
       if (!pickupAddress || !destinationAddress || !pickupLocation) {
           setError('Please enter both pickup and destination addresses.');
           toast({ title: 'Missing Information', description: 'Enter pickup and destination.', variant: 'destructive' });
@@ -248,38 +216,29 @@ export default function CustomerDashboard({ customer }: CustomerDashboardProps) 
       setError(null);
 
       try {
-          const newRideRequest: Omit<RideRequest, 'id' | 'createdAt'> = { // Omit fields Firestore will add
+          const newRideRequest: Omit<RideRequest, 'id' | 'createdAt'> = {
               riderId: customer.uid,
               riderName: customer.name,
-              riderPhone: customer.phone || undefined, // Include phone if available
+              riderPhone: customer.phone || undefined,
               pickupLocation: pickupLocation,
               pickupAddress: pickupAddress,
-              destinationLocation: destinationLocation || undefined, // Handle optional destination
+              destinationLocation: destinationLocation || undefined,
               destinationAddress: destinationAddress,
-              status: 'pending', // Initial status
-              createdAt: serverTimestamp() as Timestamp, // Use serverTimestamp placeholder
-               // Other fields like driverId, acceptedAt etc. will be null/undefined initially
+              status: 'pending',
+              createdAt: serverTimestamp() as Timestamp,
           };
-
           const docRef = await addDoc(collection(db, 'rideRequests'), newRideRequest);
-          console.log("Ride request submitted with ID: ", docRef.id);
-
-          toast({ title: 'Ride Requested!', description: 'Searching for a driver near you...' });
-          // No need to set currentRide here, the listener will pick it up.
-          // Keep loading true while 'pending' (findingDriver state handles this)
-
+          toast({ title: 'Ride Requested!', description: 'Searching for a driver...' });
       } catch (err) {
           console.error("Error requesting ride:", err);
-          setError('Failed to request ride. Please try again.');
+          setError('Failed to request ride.');
           toast({ title: 'Request Failed', description: 'Could not submit your ride request.', variant: 'destructive' });
-           setFindingDriver(false); // Stop finding indicator on error
+           setFindingDriver(false);
       } finally {
-          setLoading(false); // General button loading state
+          setLoading(false);
       }
   };
 
-
-  // Handle Ride Cancellation (by customer)
   const handleCancelRide = async () => {
       if (!currentRide || !['pending', 'accepted'].includes(currentRide.status)) {
           setError('Cannot cancel this ride.');
@@ -292,19 +251,11 @@ export default function CustomerDashboard({ customer }: CustomerDashboardProps) 
       const rideDocRef = doc(db, 'rideRequests', currentRide.id);
 
       try {
-          // Option 1: Update status to 'cancelled'
-           await updateDoc(rideDocRef, {
-               status: 'cancelled',
-               cancelledAt: serverTimestamp()
-           });
-
-          // Option 2: Delete the request (if you don't need a record of cancellations)
-          // await deleteDoc(rideDocRef);
-
+           await updateDoc(rideDocRef, { status: 'cancelled', cancelledAt: serverTimestamp() });
           toast({ title: 'Ride Cancelled', description: 'Your ride request has been cancelled.' });
-          setCurrentRide(null); // Clear the ride locally
+          setCurrentRide(null);
            setFindingDriver(false);
-           setPickupAddress(''); // Clear fields after cancellation
+           setPickupAddress('');
            setDestinationAddress('');
            setPickupLocation(null);
            setDestinationLocation(null);
@@ -312,28 +263,19 @@ export default function CustomerDashboard({ customer }: CustomerDashboardProps) 
 
       } catch (err) {
           console.error("Error cancelling ride:", err);
-          setError('Failed to cancel the ride. Please try again.');
+          setError('Failed to cancel the ride.');
           toast({ title: 'Cancellation Failed', description: 'Could not cancel your ride.', variant: 'destructive' });
       } finally {
           setLoading(false);
       }
   };
 
-
-  // Handle user logout
-  const handleLogout = async () => {
-    await signOut(auth);
-    toast({ title: "Logged Out", description: "You have been logged out." });
-    // Auth state listener in customer/page.tsx will handle redirect
-  };
+  // Removed handleLogout - handled by AppNavigation
 
   // --- Render Logic ---
 
-  const getInitials = (name: string) => {
-    return name?.split(' ').map(n => n[0]).join('').toUpperCase() || 'CU'; // Default to CU
-  };
+  // Removed getInitials - handled by AppNavigation or can be local if needed elsewhere
 
-  // Format Firestore Timestamps or Date objects relatively
   const formatRelativeTime = (timestamp: Timestamp | Date | undefined | null): string => {
     if (!timestamp) return 'N/A';
     try {
@@ -347,27 +289,8 @@ export default function CustomerDashboard({ customer }: CustomerDashboardProps) 
 
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-gray-950">
-      {/* Header */}
-      <header className="sticky top-0 z-10 flex items-center justify-between p-4 bg-background border-b shadow-sm">
-        <div className="flex items-center gap-3">
-          <UserIcon className="h-6 w-6 text-primary" /> {/* Changed Icon */}
-          <h1 className="text-xl font-semibold">CurbLink Customer</h1>
-        </div>
-        <div className="flex items-center gap-2">
-           <Avatar className="h-8 w-8 border">
-                <AvatarImage src={`https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(customer.name)}`} alt={customer.name} />
-                <AvatarFallback>{getInitials(customer.name)}</AvatarFallback>
-           </Avatar>
-          <span className="text-sm text-muted-foreground hidden sm:inline">{customer.email}</span>
-          <Button variant="ghost" size="icon" onClick={handleLogout} title="Logout">
-            <LogOut className="h-5 w-5" />
-          </Button>
-        </div>
-      </header>
-
-      {/* Main Content Area */}
-      <main className="flex-grow p-4 md:p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+    // Removed outer div, header, and footer - Handled by Layout
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6"> {/* Use grid directly */}
 
           {/* Left Column: Map and Ride Request Form */}
           <div className="lg:col-span-2 space-y-6">
@@ -388,9 +311,7 @@ export default function CustomerDashboard({ customer }: CustomerDashboardProps) 
                         <CardDescription>Enter pickup & destination to see route and estimate fare.</CardDescription>
                    </CardHeader>
                    <CardContent>
-                       {/* Replace with your actual Map component */}
                        <MapPlaceholder />
-                        {/* Display nearby drivers info (optional) */}
                         <div className="mt-2 text-xs text-muted-foreground">
                             {nearbyDrivers.length > 0 ? `${nearbyDrivers.length} drivers nearby` : "No drivers currently nearby"}
                         </div>
@@ -414,11 +335,9 @@ export default function CustomerDashboard({ customer }: CustomerDashboardProps) 
                                       placeholder="Enter pickup location"
                                       value={pickupAddress}
                                       onChange={(e) => setPickupAddress(e.target.value)}
-                                      disabled={loading}
+                                      disabled={loading || findingDriver} // Disable when finding too
                                       required
                                   />
-                                  {/* Display geocoded coords for debugging */}
-                                   {/* <p className="text-xs text-muted-foreground">Coords: {pickupLocation ? `${pickupLocation.latitude.toFixed(4)}, ${pickupLocation.longitude.toFixed(4)}` : '...'}</p> */}
                               </div>
                               <div className="space-y-2">
                                   <Label htmlFor="destination-address">Destination Address</Label>
@@ -427,18 +346,17 @@ export default function CustomerDashboard({ customer }: CustomerDashboardProps) 
                                       placeholder="Enter destination"
                                       value={destinationAddress}
                                       onChange={(e) => setDestinationAddress(e.target.value)}
-                                      disabled={loading}
+                                      disabled={loading || findingDriver} // Disable when finding too
                                       required
                                   />
-                                   {/* <p className="text-xs text-muted-foreground">Coords: {destinationLocation ? `${destinationLocation.latitude.toFixed(4)}, ${destinationLocation.longitude.toFixed(4)}` : '...'}</p> */}
                               </div>
                               {estimatedFare !== null && (
                                   <p className="text-sm font-medium">Estimated Fare: <span className="text-primary">${estimatedFare.toFixed(2)}</span></p>
                               )}
                           </CardContent>
                           <CardFooter>
-                              <Button type="submit" className="w-full bg-primary text-primary-foreground hover:bg-primary/90" disabled={loading || !pickupLocation || !destinationAddress}>
-                                  {loading ? <LoadingSpinner size="sm" /> : 'Request Ride'}
+                              <Button type="submit" className="w-full bg-primary text-primary-foreground hover:bg-primary/90" disabled={loading || findingDriver || !pickupLocation || !destinationAddress}>
+                                  {findingDriver ? <><LoadingSpinner size="sm" className="mr-2"/> Finding Driver...</> : loading ? <LoadingSpinner size="sm" /> : 'Request Ride'}
                               </Button>
                           </CardFooter>
                       </form>
@@ -474,7 +392,7 @@ export default function CustomerDashboard({ customer }: CustomerDashboardProps) 
                              <p className="text-xs text-muted-foreground">Requested {formatRelativeTime(currentRide.createdAt)}</p>
                            }
                       </CardContent>
-                      {(currentRide.status === 'pending' || currentRide.status === 'accepted') && ( // Allow cancellation if pending or just accepted
+                      {(currentRide.status === 'pending' || currentRide.status === 'accepted') && (
                           <CardFooter className="flex justify-end">
                                <Button
                                    variant="destructive"
@@ -527,29 +445,6 @@ export default function CustomerDashboard({ customer }: CustomerDashboardProps) 
                </Card>
           </div>
 
-      </main>
-
-       {/* Footer with Navigation Links */}
-       <footer className="p-4 text-center text-xs text-muted-foreground border-t mt-auto">
-            <div className="flex justify-center gap-4 mb-2">
-                <Link href="/" passHref>
-                    <Button variant="link" size="sm" className="text-xs text-muted-foreground hover:text-primary">
-                        <Car className="mr-1 h-3 w-3" /> Driver Portal
-                    </Button>
-                </Link>
-                <Link href="/customer" passHref>
-                    <Button variant="link" size="sm" className="text-xs text-primary font-semibold"> {/* Highlight current page */}
-                        <UserIcon className="mr-1 h-3 w-3" /> Customer Portal
-                    </Button>
-                </Link>
-                 <Link href="/admin" passHref>
-                     <Button variant="link" size="sm" className="text-xs text-muted-foreground hover:text-primary">
-                         <ShieldCheck className="mr-1 h-3 w-3" /> Admin Portal
-                     </Button>
-                </Link>
-            </div>
-            CurbLink © {new Date().getFullYear()}
-       </footer>
-    </div>
+    </div> // End grid container
   );
 }
